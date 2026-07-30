@@ -171,6 +171,34 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .btn-primary{flex:2; background:var(--accent); color:var(--accent-ink); border:0; border-radius:11px; padding:14px; font-family:'Space Mono',monospace; font-size:12px; letter-spacing:.06em; text-transform:uppercase; cursor:pointer;}
 .btn-ghost{flex:1; background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:11px; padding:14px; font-family:'Space Mono',monospace; font-size:12px; letter-spacing:.06em; text-transform:uppercase; cursor:pointer;}
 .btn-del{width:100%; margin-top:10px; background:transparent; color:var(--danger); border:1px solid var(--danger-soft); border-radius:11px; padding:13px; font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; cursor:pointer;}
+.sets{padding:10px 0 2px;}
+.setrow{display:grid; grid-template-columns:18px 1fr 1fr 1fr 28px; gap:6px; align-items:center; margin-bottom:6px;}
+.setrow.head .hl{font-family:'Space Mono',monospace; font-size:9px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted-2); text-align:center;}
+.setrow .no{font-family:'Space Mono',monospace; font-size:11px; color:var(--muted-2); text-align:center;}
+.setrow input{background:var(--bg-deep); border:1px solid var(--line); border-radius:8px; padding:9px 3px; color:var(--ink); font-family:'Space Mono',monospace; font-size:14px; text-align:center; min-height:40px; width:100%;}
+.setrow input:focus{outline:2px solid var(--accent-line); outline-offset:1px; border-color:var(--accent);}
+.icon-btn.sm{width:28px; height:28px; font-size:12px;}
+.add-set{width:100%; background:transparent; border:1px dashed var(--line); color:var(--accent); font-family:'Space Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; padding:9px; border-radius:8px; cursor:pointer; margin-top:2px;}
+.rest-fab{position:fixed; right:calc(16px + env(safe-area-inset-right)); bottom:calc(20px + env(safe-area-inset-bottom)); width:52px; height:52px; border-radius:50%; background:var(--accent); color:var(--accent-ink); border:0; font-size:22px; box-shadow:0 6px 20px var(--shadow); z-index:70; cursor:pointer;}
+.rest-panel{position:fixed; right:calc(16px + env(safe-area-inset-right)); bottom:calc(20px + env(safe-area-inset-bottom)); width:224px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 12px 38px var(--shadow); z-index:70;}
+.rest-top{display:flex; justify-content:space-between; align-items:center;}
+.rest-title{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);}
+.rest-disp{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:48px; text-align:center; color:var(--ink); letter-spacing:-.02em; margin:4px 0 8px;}
+.rest-disp.zero{color:var(--accent);}
+.rest-presets{display:flex; gap:5px; margin-bottom:10px;}
+.rest-presets .rp{flex:1; font-family:'Space Mono',monospace; font-size:11px; padding:7px 0; border:1px solid var(--line); background:var(--bg-deep); color:var(--muted); border-radius:7px; cursor:pointer;}
+.rest-presets .rp.on{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+.rest-ctrl{display:flex; gap:6px; align-items:center;}
+.rest-adj{flex:none; width:44px; height:40px; border:1px solid var(--line); background:var(--bg-deep); color:var(--muted); border-radius:9px; font-family:'Space Mono',monospace; font-size:12px; cursor:pointer;}
+.rest-main{flex:1; background:var(--accent); color:var(--accent-ink); border:0; border-radius:9px; padding:11px; font-family:'Space Mono',monospace; font-size:12px; text-transform:uppercase; letter-spacing:.06em; cursor:pointer;}
+.rest-reset{width:100%; margin-top:8px; background:transparent; border:0; color:var(--muted-2); font-family:'Space Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.06em; cursor:pointer;}
+.vid-btn{margin-top:10px; background:transparent; border:1px solid var(--line); color:var(--muted); font-family:'Space Mono',monospace; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; padding:9px 12px; border-radius:9px; cursor:pointer;}
+.vid-add{width:100%; background:var(--accent); color:var(--accent-ink); border:0; border-radius:12px; padding:15px; font-family:'Space Mono',monospace; font-size:12px; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; margin-bottom:14px;}
+.clip{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:12px;}
+.clip-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+.clip-date{font-family:'Space Mono',monospace; font-size:11px; color:var(--muted);}
+.clip video{width:100%; border-radius:8px; background:#000; display:block; max-height:60vh;}
+.clip-empty{color:var(--muted); font-size:13px; text-align:center; padding:24px 0;}
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px;}
 @media(max-width:360px){ .hero h1{font-size:46px} .stat .v{font-size:18px} }
 </style>
@@ -178,6 +206,8 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 <body>
 <div id="app"></div>
 <div id="toast" class="toast"></div>
+<div id="rest"></div>
+<input id="vidfile" type="file" accept="video/*" hidden>
 
 <script>
 /* ================= grille RPE ================= */
@@ -200,7 +230,8 @@ const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"
 
 /* ================= état + stockage ================= */
 let S = { week:0, edit:false, scope:"model", panel:false, sheet:null, draft:null,
-  theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{} };
+  theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[] };
+let pendingVidEx=null, galleryUrls=[];
 
 const mem={};
 const store={
@@ -268,12 +299,26 @@ function e1rm(ex, st){
   const m=T[rpe][reps-1]/100;
   return ex.bw ? r05((S.pdc+c)/m - S.pdc) : r05(c/m);
 }
-function bestTheo(exId,w){
+function bestTheoOfEntry(ex, entry){
   let best=null;
-  S.days.forEach((day,di)=>day.items.forEach((it,ii)=>{
-    if(it.exId===exId){ const v=e1rm(S.library[exId], S.log[w+"|"+it.iid]); if(v!=null&&(best==null||v>best)) best=v; }
+  if(entry && Array.isArray(entry.sets)) entry.sets.forEach(s=>{ const v=e1rm(ex,s); if(v!=null&&(best==null||v>best)) best=v; });
+  return best;
+}
+function bestTheo(exId,w){
+  const ex=S.library[exId]; let best=null;
+  S.days.forEach((day)=>day.items.forEach((it)=>{
+    if(it.exId===exId){ const v=bestTheoOfEntry(ex, S.log[w+"|"+it.iid]); if(v!=null&&(best==null||v>best)) best=v; }
   }));
   return best;
+}
+function setsPlanned(cfg){ if(cfg.ex.mode==="calc") return cfg.sets||1; return parseInt(cfg.ex.scheme,10)||3; }
+function filledSets(entry){ return (entry&&Array.isArray(entry.sets)) ? entry.sets.filter(s=>parseFloat(s.charge)&&parseInt(s.reps,10)).length : 0; }
+function isExDone(cfg,entry){ return filledSets(entry) >= Math.max(1, setsPlanned(cfg)); }
+function bestTheoLine(ex, entry){ const v=bestTheoOfEntry(ex,entry); if(v==null) return ""; return ex.bw?`≈ 1RM théo (meilleure série) : +${fr(v)} kg`:`≈ 1RM théo (meilleure série) : ${fr(v)} kg`; }
+function normalizeLog(){
+  Object.keys(S.log).forEach(k=>{ const e=S.log[k]; if(e&&Array.isArray(e.sets)) return;
+    const sets=[]; if(e&&(e.charge||e.reps||e.rpe)) sets.push({charge:e.charge,reps:e.reps,rpe:e.rpe});
+    S.log[k]={sets, open:!!(e&&e.open)}; });
 }
 function refRM(exId,w){
   for(let k=w-1;k>=0;k--){ const t=bestTheo(exId,k); if(t!=null&&isFinite(t)&&t>0) return {rm:t,fromPerf:true,wk:k}; }
@@ -342,6 +387,7 @@ function render(){
   h+=`</div>`;
   if(S.sheet) h+=renderSheet();
   document.getElementById("app").innerHTML=h;
+  if(S.sheet&&S.sheet.type==="videos") loadGalleryVideos();
 }
 
 function renderPanel(){
@@ -362,7 +408,7 @@ function renderPanel(){
 
 function renderDay(day,di,w){
   const total=day.items.length;
-  const done=day.items.filter((it)=>S.log[w+"|"+it.iid]?.done).length;
+  const done=day.items.filter((it,ii)=>isExDone(itemCfg(di,ii,w), S.log[w+"|"+it.iid])).length;
   let h=`<section class="day"><div class="day-head">`;
   if(S.edit&&S.scope==="model"){
     h+=`<div class="day-tools"><button class="icon-btn" data-a="day-move" data-di="${di}" data-dir="-1">↑</button><button class="icon-btn" data-a="day-move" data-di="${di}" data-dir="1">↓</button></div>`;
@@ -380,13 +426,14 @@ function renderDay(day,di,w){
 }
 
 function renderItem(day,di,it,ii,w){
-  const {ex,skip}=itemCfg(di,ii,w);
+  const cfg=itemCfg(di,ii,w); const {ex,skip}=cfg;
   if(!ex.id) return `<div class="ex"><div class="ex-name">(exercice supprimé)</div></div>`;
-  const k=w+"|"+it.iid; const st=S.log[k]||{};
+  const k=w+"|"+it.iid; const entry=S.log[k]||{sets:[],open:false};
   const meta=metaLine(di,ii,w);
   const info=loadFor(di,ii,w);
   const cat=ex.cat||"custom";
-  let h=`<div class="ex ${st.done?"done":""} ${skip?"skip":""}"><div class="ex-main"><div class="ex-info">`;
+  const planned=setsPlanned(cfg), filled=filledSets(entry), done=isExDone(cfg,entry);
+  let h=`<div class="ex ${done?"done":""} ${skip?"skip":""}" data-di="${di}" data-ii="${ii}" data-k="${k}"><div class="ex-main"><div class="ex-info">`;
   h+=`<div class="ex-name">${esc(ex.name)}</div>`;
   h+=`<div class="ex-meta"><span class="chip ${cat}">${CATLABEL[cat]||"Autre"}</span>`;
   if(meta.scheme) h+=`<span class="rep"><b>${esc(meta.scheme)}</b></span>`;
@@ -405,9 +452,22 @@ function renderItem(day,di,it,ii,w){
     }
     h+=`<button class="skip-toggle" data-a="skip" data-k="${k}">${skip?"◧ réactiver pour la S"+(w+1):"◧ masquer pour la S"+(w+1)}</button>`;
   } else {
-    h+=`<button class="log-btn" data-a="done" data-k="${k}"><span class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.5 L5 9 L10 3"/></svg></span>${st.done?"fait — série notée ci-dessous":"noter la série"}</button>`;
-    h+=`<div class="log ${st.open?"open":""}"><div class="log-in"><div class="g"><label>Charge</label><input type="text" inputmode="decimal" data-in="log" data-f="charge" data-k="${k}" value="${st.charge??""}" placeholder="kg"></div><div class="g"><label>Reps</label><input type="text" inputmode="numeric" data-in="log" data-f="reps" data-k="${k}" value="${st.reps??""}" placeholder="×"></div><div class="g"><label>RPE réel</label><input type="text" inputmode="decimal" data-in="log" data-f="rpe" data-k="${k}" value="${st.rpe??""}" placeholder="7"></div></div>`;
-    if(ex.mode==="calc") h+=`<div class="theo" data-theo="${it.iid}">${theoLine(ex,st)}</div>`;
+    h+=`<button class="log-btn" data-a="toggle-sets" data-k="${k}"><span class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.5 L5 9 L10 3"/></svg></span><span class="lblcount">${done?`fait — ${filled}/${planned} séries`:`noter les séries (${filled}/${planned})`}</span></button>`;
+    h+=`<div class="log ${entry.open?"open":""}"><div class="sets">`;
+    h+=`<div class="setrow head"><span class="no"></span><span class="hl">Charge</span><span class="hl">Reps</span><span class="hl">RPE</span><span></span></div>`;
+    const rows=Math.max(planned, (entry.sets?entry.sets.length:0), 1);
+    for(let i=0;i<rows;i++){ const s=(entry.sets&&entry.sets[i])||{};
+      h+=`<div class="setrow"><span class="no">${i+1}</span>`
+        +`<input type="text" inputmode="decimal" data-in="set" data-f="charge" data-k="${k}" data-i="${i}" value="${s.charge??""}" placeholder="kg">`
+        +`<input type="text" inputmode="numeric" data-in="set" data-f="reps" data-k="${k}" data-i="${i}" value="${s.reps??""}" placeholder="×">`
+        +`<input type="text" inputmode="decimal" data-in="set" data-f="rpe" data-k="${k}" data-i="${i}" value="${s.rpe??""}" placeholder="7">`
+        +(i>=planned?`<button class="icon-btn sm danger" data-a="set-del" data-k="${k}" data-i="${i}">✕</button>`:`<span></span>`)
+        +`</div>`;
+    }
+    h+=`<button class="add-set" data-a="set-add" data-k="${k}">＋ série</button></div>`;
+    if(ex.mode==="calc") h+=`<div class="theo" data-theo="${it.iid}">${bestTheoLine(ex,entry)}</div>`;
+    const nvid=S.videos.filter(v=>v.exId===ex.id).length;
+    h+=`<button class="vid-btn" data-a="videos" data-id="${ex.id}">📹 Vidéos${nvid?` (${nvid})`:""}</button>`;
     h+=`</div>`;
   }
   h+=`</div>`;
@@ -450,6 +510,16 @@ function renderSheet(){
     inner+=`<div class="sheet-actions"><button class="btn-ghost" data-a="sheet-close">Annuler</button><button class="btn-primary" data-a="draft-save">Enregistrer</button></div>`;
     if(sh.exId) inner+=`<button class="btn-del" data-a="ex-del" data-id="${sh.exId}">Supprimer de la bibliothèque</button>`;
     inner+=`</div>`;
+  } else if(sh.type==="videos"){
+    const ex=S.library[sh.exId]||{name:"exercice"};
+    inner=`<div class="sheet-h"><div class="t">Vidéos · ${esc(ex.name)}</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    inner+=`<button class="vid-add" data-a="vid-add" data-id="${sh.exId}">＋ Filmer / choisir une vidéo</button>`;
+    const clips=clipsFor(sh.exId);
+    if(!clips.length) inner+=`<div class="clip-empty">Aucune vidéo pour l'instant.<br>Filme ton exo du jour pour suivre ta technique dans le temps.</div>`;
+    clips.forEach(c=>{
+      const dt=new Date(c.date).toLocaleString("fr-FR",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+      inner+=`<div class="clip"><div class="clip-top"><span class="clip-date">${dt}</span><button class="icon-btn sm danger" data-a="vid-del" data-id="${c.id}">✕</button></div><video data-clip="${c.id}" controls preload="metadata" playsinline></video></div>`;
+    });
   }
   return `<div class="sheet-backdrop" data-a="backdrop"><div class="sheet">${inner}</div></div>`;
 }
@@ -465,7 +535,15 @@ document.addEventListener("click",e=>{
   else if(a==="scope"){ S.scope=el.dataset.v; render(); }
   else if(a==="week"){ S.week=+el.dataset.v; render(); }
   else if(a==="panel"){ S.panel=!S.panel; render(); }
-  else if(a==="done"){ const k=el.dataset.k; const st=S.log[k]||(S.log[k]={}); st.done=!st.done; st.open=st.done; saveLog(); render(); }
+  else if(a==="toggle-sets"){ const k=el.dataset.k; const e=S.log[k]||(S.log[k]={sets:[],open:false}); e.open=!e.open; saveLog(); render(); }
+  else if(a==="set-add"){ const k=el.dataset.k; const e=S.log[k]||(S.log[k]={sets:[],open:true}); if(!e.sets)e.sets=[]; e.sets.push({}); saveLog(); render(); }
+  else if(a==="set-del"){ const k=el.dataset.k, i=+el.dataset.i; const e=S.log[k]; if(e&&e.sets){ e.sets.splice(i,1); saveLog(); render(); } }
+  else if(a==="rest-open"){ REST.open=true; if(REST.remaining<=0) REST.remaining=REST.preset; renderRest(); }
+  else if(a==="rest-close"){ REST.open=false; renderRest(); }
+  else if(a==="rest-preset"){ REST.preset=+el.dataset.v; REST.remaining=+el.dataset.v; renderRest(); }
+  else if(a==="rest-adjust"){ REST.remaining=Math.max(0,REST.remaining+(+el.dataset.v)); renderRest(); }
+  else if(a==="rest-toggle"){ if(REST.running){ clearInterval(REST.id); REST.running=false; } else { if(REST.remaining<=0) REST.remaining=REST.preset; REST.running=true; REST.id=setInterval(restTick,1000); } renderRest(); }
+  else if(a==="rest-reset"){ clearInterval(REST.id); REST.running=false; REST.remaining=REST.preset; renderRest(); }
   else if(a==="skip"){ const k=el.dataset.k; const ov=S.overrides[k]||(S.overrides[k]={}); ov.skip=!ov.skip; if(!ov.skip&&Object.keys(ov).length===1) delete S.overrides[k]; saveProgram(); render(); }
   else if(a==="day-add"){ S.days.push({id:uid(),name:"Nouvelle journée",items:[]}); saveProgram(); render(); }
   else if(a==="day-del"){ const di=+el.dataset.di; if(confirm("Supprimer cette journée ?")){ S.days.splice(di,1); saveProgram(); render(); } }
@@ -483,7 +561,10 @@ document.addEventListener("click",e=>{
   else if(a==="draft-bw"){ S.draft.bw=el.dataset.v==="1"; render(); }
   else if(a==="draft-save"){ saveDraft(); }
   else if(a==="ex-del"){ const id=el.dataset.id; if(confirm("Supprimer cet exercice et toutes ses occurrences dans le programme ?")){ delete S.library[id]; S.days.forEach(d=>d.items=d.items.filter(it=>it.exId!==id)); S.sheet=null; saveProgram(); render(); } }
-  else if(a==="sheet-close"||a==="backdrop"){ if(a==="backdrop"&&e.target.closest(".sheet")) return; S.sheet=null; S.draft=null; render(); }
+  else if(a==="videos"){ S.sheet={type:"videos", exId:el.dataset.id}; render(); }
+  else if(a==="vid-add"){ pendingVidEx=el.dataset.id; const inp=document.getElementById("vidfile"); if(inp) inp.click(); }
+  else if(a==="vid-del"){ const id=el.dataset.id; if(confirm("Supprimer cette vidéo ?")) delClip(id); }
+  else if(a==="sheet-close"||a==="backdrop"){ if(a==="backdrop"&&e.target.closest(".sheet")) return; revokeGallery(); S.sheet=null; S.draft=null; render(); }
   else if(a==="export"){ exportData(); }
   else if(a==="reset"){ if(confirm("Effacer ton suivi (séries + coches) ? Ton programme et tes 1RM restent.")){ S.log={}; store.del("sb:log"); render(); toast("Suivi effacé"); } }
 });
@@ -492,8 +573,10 @@ document.addEventListener("click",e=>{
 document.addEventListener("input",e=>{
   const el=e.target.closest("[data-in]"); if(!el) return;
   const t=el.dataset.in;
-  if(t==="log"){ const k=el.dataset.k, f=el.dataset.f; const st=S.log[k]||(S.log[k]={}); st[f]=el.value; saveLog();
-    const ex=exOfKey(k); if(ex&&ex.mode==="calc"){ const line=el.closest(".ex").querySelector(".theo"); if(line) line.textContent=theoLine(ex,st); } }
+  if(t==="set"){ const k=el.dataset.k, f=el.dataset.f, i=+el.dataset.i; const e=S.log[k]||(S.log[k]={sets:[],open:true}); if(!e.sets)e.sets=[]; while(e.sets.length<=i) e.sets.push({}); e.sets[i][f]=el.value; saveLog();
+    const exEl=el.closest(".ex"); const ex=exOfKey(k);
+    if(ex&&ex.mode==="calc"){ const line=exEl.querySelector(".theo"); if(line) line.textContent=bestTheoLine(ex,e); }
+    updateExDone(exEl); }
   else if(t==="dayname"){ S.days[+el.dataset.di].name=el.value; saveProgram(); }
   else if(t==="pdc"){ const v=parseFloat(el.value); if(!isNaN(v)){ S.pdc=v; saveProgram(); } }
   else if(t==="orm"){ const v=parseFloat(el.value); if(!isNaN(v)){ const ex=S.library[el.dataset.id]; if(ex) ex.oneRM=v; saveProgram(); } }
@@ -501,9 +584,65 @@ document.addEventListener("input",e=>{
   else if(t==="ov"){ const k=el.dataset.k, f=el.dataset.f, v=parseFloat(el.value); const ov=S.overrides[k]||(S.overrides[k]={}); if(el.value===""){ delete ov[f]; } else if(!isNaN(v)){ ov[f]=v; } saveProgram(); }
   else if(t==="draft"){ const f=el.dataset.f; S.draft[f]= (f==="oneRM"||f==="sets"||f==="reps") ? parseFloat(el.value)||0 : el.value; }
 });
-document.addEventListener("change",e=>{ const el=e.target; if(el.id==="importf"&&el.files[0]){ importData(el.files[0]); el.value=""; } });
+document.addEventListener("change",e=>{ const el=e.target;
+  if(el.id==="importf"&&el.files[0]){ importData(el.files[0]); el.value=""; }
+  else if(el.id==="vidfile"&&el.files[0]){ addClip(pendingVidEx, el.files[0]); el.value=""; }
+});
 
 function exOfKey(k){ const iid=k.split("|")[1]; for(const d of S.days) for(const it of d.items) if(it.iid===iid) return S.library[it.exId]; return null; }
+function updateExDone(exEl){
+  if(!exEl) return; const di=+exEl.dataset.di, ii=+exEl.dataset.ii, k=exEl.dataset.k;
+  const cfg=itemCfg(di,ii,S.week), entry=S.log[k]||{sets:[]};
+  const planned=setsPlanned(cfg), filled=filledSets(entry), done=isExDone(cfg,entry);
+  exEl.classList.toggle("done",done);
+  const lbl=exEl.querySelector(".lblcount"); if(lbl) lbl.textContent = done?`fait — ${filled}/${planned} séries`:`noter les séries (${filled}/${planned})`;
+  const dayEl=exEl.closest(".day"); if(dayEl){ let dn=0; S.days[di].items.forEach((it,jj)=>{ if(isExDone(itemCfg(di,jj,S.week), S.log[S.week+"|"+it.iid])) dn++; }); const total=S.days[di].items.length; const fg=dayEl.querySelector(".ring .fg"), tx=dayEl.querySelector(".ring text"); if(fg) fg.setAttribute("stroke-dashoffset",(RING_C*(1-(total?dn/total:0))).toFixed(1)); if(tx) tx.textContent=dn+"/"+total; }
+}
+/* ---- chrono de repos ---- */
+let REST={open:false, remaining:0, running:false, preset:90, id:null};
+function restTick(){ REST.remaining--; if(REST.remaining<=0){ REST.remaining=0; clearInterval(REST.id); REST.running=false; if(navigator.vibrate) try{navigator.vibrate([220,120,220]);}catch(e){} } renderRest(); }
+function renderRest(){
+  const m=Math.floor(REST.remaining/60), s=REST.remaining%60, disp=`${m}:${String(s).padStart(2,"0")}`;
+  let h="";
+  if(!REST.open){ h=`<button class="rest-fab" data-a="rest-open" aria-label="Chrono de repos">⏱</button>`; }
+  else{
+    h=`<div class="rest-panel"><div class="rest-top"><span class="rest-title">Repos</span><button class="icon-btn sm" data-a="rest-close">✕</button></div>`
+     +`<div class="rest-disp ${REST.remaining===0?"zero":""}">${disp}</div>`
+     +`<div class="rest-presets">`+[60,90,120,180].map(p=>`<button class="rp ${REST.preset===p?"on":""}" data-a="rest-preset" data-v="${p}">${p<120?p+"s":(p/60)+"min"}</button>`).join("")+`</div>`
+     +`<div class="rest-ctrl"><button class="rest-adj" data-a="rest-adjust" data-v="-15">−15</button><button class="rest-main" data-a="rest-toggle">${REST.running?"Pause":"Start"}</button><button class="rest-adj" data-a="rest-adjust" data-v="15">+15</button></div>`
+     +`<button class="rest-reset" data-a="rest-reset">Réinitialiser</button></div>`;
+  }
+  document.getElementById("rest").innerHTML=h;
+}
+/* ---- vidéos (IndexedDB local) ---- */
+const VDB="sb_videos_db", VSTORE="clips";
+function idbOpen(){ return new Promise((res,rej)=>{ if(!window.indexedDB) return rej("no-idb"); const r=indexedDB.open(VDB,1); r.onupgradeneeded=()=>{ const db=r.result; if(!db.objectStoreNames.contains(VSTORE)) db.createObjectStore(VSTORE); }; r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+function idbPut(id,blob){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(VSTORE,"readwrite"); tx.objectStore(VSTORE).put(blob,id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); })); }
+function idbGet(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(VSTORE,"readonly"); const rq=tx.objectStore(VSTORE).get(id); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); })); }
+function idbDel(id){ return idbOpen().then(db=>new Promise((res,rej)=>{ const tx=db.transaction(VSTORE,"readwrite"); tx.objectStore(VSTORE).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); })); }
+function saveVideos(){ store.set("sb:videos", S.videos); }
+function clipsFor(exId){ return S.videos.filter(v=>v.exId===exId).sort((a,b)=>b.date.localeCompare(a.date)); }
+function addClip(exId, file){
+  if(!file||!exId) return;
+  const id=uid();
+  idbPut(id,file).then(()=>{
+    S.videos.push({id, exId, date:new Date().toISOString(), name:file.name||""}); saveVideos();
+    render(); toast("Vidéo ajoutée");
+  }).catch(()=>toast("Vidéo non enregistrée (trop lourde ?)"));
+}
+function delClip(id){
+  idbDel(id).catch(()=>{});
+  S.videos=S.videos.filter(v=>v.id!==id); saveVideos(); render();
+}
+function revokeGallery(){ galleryUrls.forEach(u=>URL.revokeObjectURL(u)); galleryUrls=[]; }
+function loadGalleryVideos(){
+  revokeGallery();
+  if(!S.sheet||S.sheet.type!=="videos") return;
+  clipsFor(S.sheet.exId).forEach(c=>{
+    const el=document.querySelector(`video[data-clip="${c.id}"]`); if(!el) return;
+    idbGet(c.id).then(blob=>{ if(blob){ const url=URL.createObjectURL(blob); galleryUrls.push(url); el.src=url; } }).catch(()=>{});
+  });
+}
 function openExEditor(exId, di){
   const base=exId?S.library[exId]:null;
   S.draft = base ? {...base} : {id:uid(),name:"",cat:"renfort",mode:"free",bw:false,oneRM:50,sets:4,reps:5,scheme:"3 × 8-12",rpeText:"7-8"};
@@ -529,7 +668,7 @@ function importData(file){
   const rd=new FileReader();
   rd.onload=()=>{ try{ const d=JSON.parse(rd.result);
     if(d.pdc!=null) S.pdc=d.pdc; if(d.weekRPE) S.weekRPE=d.weekRPE; if(d.library) S.library=d.library; if(d.days) S.days=d.days; if(d.overrides) S.overrides=d.overrides; if(d.log) S.log=d.log; if(d.theme) S.theme=d.theme;
-    saveProgram(); store.set("sb:log",S.log); saveTheme(); render(); toast("Programme importé");
+    normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveTheme(); render(); toast("Programme importé");
   }catch(err){ toast("Fichier illisible"); } };
   rd.readAsText(file);
 }
@@ -558,7 +697,9 @@ function importData(file){
     S.pdc=prog.pdc; S.weekRPE=prog.weekRPE||[6,6.5,7,7.5]; S.library=prog.library; S.days=prog.days; S.overrides=prog.overrides||{};
     S.log=store.get("sb:log")||{};
   }
-  render();
+  normalizeLog();
+  S.videos = store.get("sb:videos") || [];
+  render(); renderRest();
 })();
 </script>
 </body>
