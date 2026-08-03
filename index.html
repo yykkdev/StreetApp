@@ -440,6 +440,10 @@ function allTimeBest(exId, excludeKey){
 }
 function setsPlanned(cfg){ if(cfg.ex.mode==="calc") return cfg.sets||1; return parseInt(cfg.ex.scheme,10)||3; }
 function filledSets(entry){ return (entry&&Array.isArray(entry.sets)) ? entry.sets.filter(s=>parseFloat(s.charge)&&parseInt(s.reps,10)).length : 0; }
+function setTonnage(s){ const c=parseFloat(s.charge), r=parseInt(s.reps,10); return (c&&r) ? c*r : 0; }
+function entryTonnage(entry){ return (entry&&Array.isArray(entry.sets)) ? entry.sets.reduce((sum,s)=>sum+setTonnage(s),0) : 0; }
+function dayTonnage(day,w){ return day.items.reduce((sum,it)=>sum+entryTonnage(S.log[w+"|"+it.iid]),0); }
+function weekTonnage(w){ return S.days.reduce((sum,day)=>sum+dayTonnage(day,w),0); }
 function isExDone(cfg,entry){ return filledSets(entry) >= Math.max(1, setsPlanned(cfg)); }
 function bestTheoLine(ex, entry){ const v=bestTheoOfEntry(ex,entry); if(v==null) return ""; return ex.bw?`≈ 1RM théo (meilleure série) : +${fr(v)} kg`:`≈ 1RM théo (meilleure série) : ${fr(v)} kg`; }
 function normalizeLog(){
@@ -498,7 +502,8 @@ function render(){
   /* rail */
   h+=`<div class="rail-wrap"><div class="rail">`;
   for(let i=0;i<4;i++) h+=`<button class="wk ${i===w?"active":""}" data-a="week" data-v="${i}">S${i+1}<small>RPE ${fr(S.weekRPE[i])}</small></button>`;
-  h+=`</div><div class="wk-caption">Semaine ${w+1} · <b>${WEEK_TAG[w]}</b></div>`;
+  const wkTon=weekTonnage(w);
+  h+=`</div><div class="wk-caption">Semaine ${w+1} · <b>${WEEK_TAG[w]}</b>${wkTon>0?` · <b>${fr(wkTon)} kg</b> au total`:""}</div>`;
   if(S.edit){
     h+=`<div class="editbar"><div class="lbl">Mode édition — j'édite :</div>
       <div class="scope-tog"><button class="st ${S.scope==="model"?"on":""}" data-a="scope" data-v="model">Le modèle</button><button class="st ${S.scope==="week"?"on":""}" data-a="scope" data-v="week">Cette semaine (S${w+1})</button></div>
@@ -596,7 +601,8 @@ function renderDay(day,di,w){
     h+=`<button class="icon-btn danger" data-a="day-del" data-di="${di}">✕</button>`;
   } else {
     h+=`<svg class="ring" viewBox="0 0 38 38"><circle class="bg" cx="19" cy="19" r="15"></circle><circle class="fg" cx="19" cy="19" r="15" transform="rotate(-90 19 19)" stroke-dasharray="${RING_C.toFixed(1)}" stroke-dashoffset="${(RING_C*(1-(total?done/total:0))).toFixed(1)}"></circle><text class="ring-txt" x="19" y="22.5" text-anchor="middle">${done}/${total}</text></svg>`;
-    h+=`<div class="day-title"><div class="d">${esc(day.name)}</div><div class="t">${total} exercice${total>1?"s":""}</div></div>`;
+    const tonnage=dayTonnage(day,w);
+    h+=`<div class="day-title"><div class="d">${esc(day.name)}</div><div class="t">${total} exercice${total>1?"s":""}${tonnage>0?` · ${fr(tonnage)} kg`:""}</div></div>`;
   }
   h+=`</div>`;
   day.items.forEach((it,ii)=>{ h+=renderItem(day,di,it,ii,w); });
@@ -906,7 +912,9 @@ function updateExDone(exEl){
   const planned=setsPlanned(cfg), filled=filledSets(entry), done=isExDone(cfg,entry);
   exEl.classList.toggle("done",done);
   const lbl=exEl.querySelector(".lblcount"); if(lbl) lbl.textContent = done?`fait — ${filled}/${planned} séries`:`noter les séries (${filled}/${planned})`;
-  const dayEl=exEl.closest(".day"); if(dayEl){ let dn=0; S.days[di].items.forEach((it,jj)=>{ if(isExDone(itemCfg(di,jj,S.week), S.log[S.week+"|"+it.iid])) dn++; }); const total=S.days[di].items.length; const fg=dayEl.querySelector(".ring .fg"), tx=dayEl.querySelector(".ring text"); if(fg) fg.setAttribute("stroke-dashoffset",(RING_C*(1-(total?dn/total:0))).toFixed(1)); if(tx) tx.textContent=dn+"/"+total; }
+  const dayEl=exEl.closest(".day"); if(dayEl){ let dn=0; S.days[di].items.forEach((it,jj)=>{ if(isExDone(itemCfg(di,jj,S.week), S.log[S.week+"|"+it.iid])) dn++; }); const total=S.days[di].items.length; const fg=dayEl.querySelector(".ring .fg"), tx=dayEl.querySelector(".ring text"); if(fg) fg.setAttribute("stroke-dashoffset",(RING_C*(1-(total?dn/total:0))).toFixed(1)); if(tx) tx.textContent=dn+"/"+total;
+    const tEl=dayEl.querySelector(".day-title .t"); if(tEl){ const ton=dayTonnage(S.days[di],S.week); tEl.textContent=`${total} exercice${total>1?"s":""}${ton>0?` · ${fr(ton)} kg`:""}`; } }
+  const wkEl=document.querySelector(".wk-caption"); if(wkEl){ const wkTon=weekTonnage(S.week); wkEl.innerHTML=`Semaine ${S.week+1} · <b>${WEEK_TAG[S.week]}</b>${wkTon>0?` · <b>${fr(wkTon)} kg</b> au total`:""}`; }
 }
 /* ---- chrono de repos ---- */
 let REST={open:false, remaining:0, running:false, preset:90, id:null};
