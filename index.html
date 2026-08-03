@@ -547,7 +547,7 @@ function renderDrawer(){
 
 /* ---- calculateur d'échauffement ---- */
 let warmupState={ weight:"", step:10, bw:false };
-let accountState={ mode:"signin", email:"", password:"" };
+let accountState={ mode:"signin", email:"", password:"", notice:null };
 function warmupOutHtml(){
   const w=parseFloat(warmupState.weight);
   if(!w||w<=0) return `<div class="clip-empty">Entre le poids de ta série de travail pour voir la montée en charge.</div>`;
@@ -734,11 +734,12 @@ function renderSheet(){
     if(S.user){
       const syncedAt=store.get("sb:syncedAt");
       const dt=syncedAt?new Date(syncedAt).toLocaleString("fr-FR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):null;
-      inner+=`<div class="exform"><div class="fr"><label>Connecté</label><div class="rep"><b>${esc(S.user.email)}</b></div></div>`;
+      inner+=`<div class="exform"><div class="editbar"><div class="lbl">✓ Connecté</div><div class="hint">${esc(S.user.email)}</div></div>`;
       inner+=`<div class="backup-note">${dt?`Dernière synchro : ${dt}`:"Pas encore synchronisé."}</div>`;
       inner+=`<button class="btn-del" data-a="account-logout">Se déconnecter</button></div>`;
     } else {
       inner+=`<div class="exform">`;
+      if(accountState.notice) inner+=`<div class="editbar"><div class="lbl">✓ Compte créé</div><div class="hint">${esc(accountState.notice)}</div></div>`;
       inner+=`<div class="fr"><label>Type</label><div class="seg"><button data-a="account-mode" data-v="signin" class="${accountState.mode==="signin"?"on":""}">Se connecter</button><button data-a="account-mode" data-v="signup" class="${accountState.mode==="signup"?"on":""}">Créer un compte</button></div></div>`;
       inner+=`<div class="fr"><label>Email</label><input type="email" data-in="account" data-f="email" value="${esc(accountState.email)}" autocomplete="email"></div>`;
       inner+=`<div class="fr"><label>Mot de passe</label><input type="password" data-in="account" data-f="password" value="${esc(accountState.password)}" autocomplete="${accountState.mode==="signup"?"new-password":"current-password"}"></div>`;
@@ -801,16 +802,23 @@ document.addEventListener("click",e=>{
   else if(a==="warmup-from"){ warmupState={weight:el.dataset.w, bw:el.dataset.bw==="1"}; S.sheet={type:"warmup"}; render(); }
   else if(a==="warmup-bw"){ warmupState.bw=el.dataset.v==="1"; render(); }
   else if(a==="open-account"){ S.drawer=false; S.sheet={type:"account"}; render(); }
-  else if(a==="account-mode"){ accountState.mode=el.dataset.v; render(); }
+  else if(a==="account-mode"){ accountState.mode=el.dataset.v; accountState.notice=null; render(); }
   else if(a==="account-submit"){
     if(!supa){ toast("Cloud indisponible"); return; }
     const email=(accountState.email||"").trim(), password=accountState.password||"";
     if(!email||!password){ toast("Email et mot de passe requis"); return; }
-    const call = accountState.mode==="signup" ? supa.auth.signUp({email,password}) : supa.auth.signInWithPassword({email,password});
+    const wasSignup=accountState.mode==="signup";
+    const call = wasSignup ? supa.auth.signUp({email,password}) : supa.auth.signInWithPassword({email,password});
     call.then(({data,error})=>{
       if(error){ toast(error.message||"Connexion impossible"); return; }
-      if(!data.session){ toast("Vérifie ta boîte mail pour confirmer le compte"); return; }
-      accountState={mode:"signin",email:"",password:""}; S.sheet=null; render(); toast("Connecté");
+      if(!data.session){
+        accountState={mode:"signin", email, password:"", notice:`Compte créé pour ${email}. Clique le lien reçu par email pour confirmer, puis reconnecte-toi ici.`};
+        render();
+        return;
+      }
+      S.user={id:data.session.user.id, email:data.session.user.email};
+      accountState={mode:"signin",email:"",password:"",notice:null};
+      render(); toast("Connecté"); pullFromCloud();
     }).catch(()=>toast("Connexion impossible"));
   }
   else if(a==="account-logout"){
