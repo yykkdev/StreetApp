@@ -471,17 +471,16 @@ function renderDrawer(){
 }
 
 /* ---- calculateur d'échauffement ---- */
-let warmupState={ weight:"", bw:false };
-const WARMUP_STEPS=[[40,8],[55,5],[70,3],[85,2],[95,1]];
+let warmupState={ weight:"", step:10, bw:false };
 function warmupOutHtml(){
   const w=parseFloat(warmupState.weight);
   if(!w||w<=0) return `<div class="clip-empty">Entre le poids de ta série de travail pour voir la montée en charge.</div>`;
+  const step=parseFloat(warmupState.step);
   const prefix=warmupState.bw?"+":"";
   let h="";
-  WARMUP_STEPS.forEach(([pct,reps])=>{
-    const load=warmupState.bw ? r05(w*pct/100) : r25(w*pct/100);
-    h+=`<div class="wu-row"><span>${pct}%</span><span>${reps} rép.</span><span class="wu-load">${prefix}${fr(load)} kg</span></div>`;
-  });
+  if(step>0) for(let v=step,n=0; v<w && n<30; v+=step,n++){
+    h+=`<div class="wu-row"><span>Palier</span><span class="wu-load">${prefix}${fr(v)} kg</span></div>`;
+  }
   h+=`<div class="wu-final">Puis ta série de travail : <b>${prefix}${fr(w)} kg</b></div>`;
   return h;
 }
@@ -651,6 +650,7 @@ function renderSheet(){
     inner=`<div class="sheet-h"><div class="t">Échauffement</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
     inner+=`<div class="exform">`;
     inner+=`<div class="fr"><label>Charge de la série de travail</label><input type="number" inputmode="decimal" data-in="warmup" data-f="weight" value="${esc(warmupState.weight)}" placeholder="kg"></div>`;
+    inner+=`<div class="fr"><label>Palier (incrément)</label><input type="number" inputmode="decimal" data-in="warmup" data-f="step" value="${esc(warmupState.step)}" placeholder="kg"></div>`;
     inner+=`<div class="fr"><label>Type de charge</label><div class="seg"><button data-a="warmup-bw" data-v="0" class="${!warmupState.bw?"on":""}">Barre (total)</button><button data-a="warmup-bw" data-v="1" class="${warmupState.bw?"on":""}">Lesté (poids de corps + ajout)</button></div></div>`;
     inner+=`</div><div id="warmup-out">${warmupOutHtml()}</div>`;
   }
