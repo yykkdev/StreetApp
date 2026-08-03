@@ -37,6 +37,10 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .hero h1{font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:clamp(46px,15vw,74px); line-height:.9; letter-spacing:-.03em; margin:12px 0 0;}
 .hero .sub{font-family:'Space Mono',monospace; font-size:12px; color:var(--muted); margin-top:12px;}
 .hero .sub b{color:var(--ink); font-weight:400;}
+.landing{min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left)); gap:22px; text-align:center;}
+.landing .hero{padding:0;}
+.landing-actions,.landing-form{display:flex; flex-direction:column; gap:10px; width:100%; max-width:320px;}
+.landing-form .exform{text-align:left;}
 .profile{margin-top:18px; display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
 .stat{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 8px 8px; cursor:pointer; text-align:left; box-shadow:0 1px 2px var(--shadow); min-height:52px;}
 .stat:active{transform:translateY(1px)}
@@ -288,7 +292,7 @@ const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"
 /* ================= état + stockage ================= */
 let S = { week:0, edit:false, scope:"model", panel:false, drawer:false, sheet:null, draft:null,
   theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[],
-  blockName:"Bloc 1 — Accumulation", archive:[], user:null };
+  blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice" };
 let pendingVidEx=null, galleryUrls=[];
 let introControllers=[];
 
@@ -470,6 +474,7 @@ function metaLine(di,ii,w){
 
 function render(){
   document.documentElement.dataset.theme=S.theme;
+  if(S.landing){ document.getElementById("app").innerHTML=renderLandingHtml(); return; }
   const w=S.week;
   let h="";
   h+=`<div class="wrap">`;
@@ -548,6 +553,25 @@ function renderDrawer(){
 /* ---- calculateur d'échauffement ---- */
 let warmupState={ weight:"", step:10, bw:false };
 let accountState={ mode:"signin", email:"", password:"", notice:null };
+function renderAuthForm(){
+  let h="";
+  if(accountState.notice) h+=`<div class="editbar"><div class="lbl">✓ Compte créé</div><div class="hint">${esc(accountState.notice)}</div></div>`;
+  h+=`<div class="fr"><label>Type</label><div class="seg"><button data-a="account-mode" data-v="signin" class="${accountState.mode==="signin"?"on":""}">J'ai déjà un compte</button><button data-a="account-mode" data-v="signup" class="${accountState.mode==="signup"?"on":""}">Nouveau compte</button></div></div>`;
+  h+=`<div class="fr"><label>Email</label><input type="email" data-in="account" data-f="email" value="${esc(accountState.email)}" autocomplete="email"></div>`;
+  h+=`<div class="fr"><label>Mot de passe</label><input type="password" data-in="account" data-f="password" value="${esc(accountState.password)}" autocomplete="${accountState.mode==="signup"?"new-password":"current-password"}"></div>`;
+  h+=`<div class="backup-note">Tes données restent utilisables hors-ligne sans compte. Se connecter active juste la sauvegarde cloud.</div>`;
+  return h;
+}
+function renderLandingHtml(){
+  let h=`<div class="landing"><header class="hero"><h1>STREET</h1><div class="sub">Programme de street-lifting</div></header>`;
+  if(S.landingView==="login"){
+    h+=`<div class="landing-form"><div class="exform">${renderAuthForm()}</div>`;
+    h+=`<div class="sheet-actions"><button class="btn-ghost" data-a="landing-back">← Retour</button><button class="btn-primary" data-a="account-submit">${accountState.mode==="signup"?"Créer le compte":"Se connecter"}</button></div></div>`;
+  } else {
+    h+=`<div class="landing-actions"><button class="btn-primary" data-a="landing-login">Se connecter</button><button class="btn-ghost" data-a="landing-local">Créer un programme local</button></div>`;
+  }
+  return h+`</div>`;
+}
 function warmupOutHtml(){
   const w=parseFloat(warmupState.weight);
   if(!w||w<=0) return `<div class="clip-empty">Entre le poids de ta série de travail pour voir la montée en charge.</div>`;
@@ -738,12 +762,7 @@ function renderSheet(){
       inner+=`<div class="backup-note">${dt?`Dernière synchro : ${dt}`:"Pas encore synchronisé."}</div>`;
       inner+=`<button class="btn-del" data-a="account-logout">Se déconnecter</button></div>`;
     } else {
-      inner+=`<div class="exform">`;
-      if(accountState.notice) inner+=`<div class="editbar"><div class="lbl">✓ Compte créé</div><div class="hint">${esc(accountState.notice)}</div></div>`;
-      inner+=`<div class="fr"><label>Type</label><div class="seg"><button data-a="account-mode" data-v="signin" class="${accountState.mode==="signin"?"on":""}">J'ai déjà un compte</button><button data-a="account-mode" data-v="signup" class="${accountState.mode==="signup"?"on":""}">Nouveau compte</button></div></div>`;
-      inner+=`<div class="fr"><label>Email</label><input type="email" data-in="account" data-f="email" value="${esc(accountState.email)}" autocomplete="email"></div>`;
-      inner+=`<div class="fr"><label>Mot de passe</label><input type="password" data-in="account" data-f="password" value="${esc(accountState.password)}" autocomplete="${accountState.mode==="signup"?"new-password":"current-password"}"></div>`;
-      inner+=`<div class="backup-note">Tes données restent utilisables hors-ligne sans compte. Se connecter active juste la sauvegarde cloud.</div>`;
+      inner+=`<div class="exform">${renderAuthForm()}`;
       inner+=`<div class="sheet-actions"><button class="btn-ghost" data-a="sheet-close">Annuler</button><button class="btn-primary" data-a="account-submit">${accountState.mode==="signup"?"Créer le compte":"Se connecter"}</button></div></div>`;
     }
   }
@@ -803,6 +822,9 @@ document.addEventListener("click",e=>{
   else if(a==="warmup-bw"){ warmupState.bw=el.dataset.v==="1"; render(); }
   else if(a==="open-account"){ S.drawer=false; S.sheet={type:"account"}; render(); }
   else if(a==="account-mode"){ accountState.mode=el.dataset.v; accountState.notice=null; render(); }
+  else if(a==="landing-login"){ S.landingView="login"; render(); }
+  else if(a==="landing-back"){ S.landingView="choice"; render(); }
+  else if(a==="landing-local"){ S.landing=false; saveProgram(); render(); }
   else if(a==="account-submit"){
     if(!supa){ toast("Cloud indisponible"); return; }
     const email=(accountState.email||"").trim(), password=accountState.password||"";
@@ -818,6 +840,7 @@ document.addEventListener("click",e=>{
       }
       S.user={id:data.session.user.id, email:data.session.user.email};
       accountState={mode:"signin",email:"",password:"",notice:null};
+      if(S.landing){ S.landing=false; saveProgram(); }
       render(); toast("Connecté"); pullFromCloud();
     }).catch(()=>toast("Connexion impossible"));
   }
@@ -964,10 +987,14 @@ function importData(file){
   const th=store.get("sb:theme"); const prefDark=(typeof window!=="undefined"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches);
   S.theme = th || (prefDark?"dark":"light");
   let prog=store.get("sb:program");
-  if(!prog){
+  const oldMax=store.get("barre:maxes");
+  if(!prog && !oldMax){
+    /* appareil jamais initialisé : écran d'accueil (compte vs local), pas de seed() */
+    S.pdc=0; S.weekRPE=[6,6.5,7,7.5]; S.library={}; S.days=[]; S.overrides={}; S.log={};
+    S.landing=true; S.landingView="choice";
+  } else if(!prog){
     prog=seed();
     /* migration depuis l'ancienne version */
-    const oldMax=store.get("barre:maxes");
     if(oldMax){ if(oldMax.pdc!=null) prog.pdc=oldMax.pdc;
       if(oldMax.squat!=null){ prog.library.sqf.oneRM=oldMax.squat; prog.library.sqv.oneRM=oldMax.squat; }
       if(oldMax.dips!=null){ prog.library.dpf.oneRM=oldMax.dips; prog.library.dpv.oneRM=oldMax.dips; }
