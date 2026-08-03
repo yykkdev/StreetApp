@@ -14,6 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{ --bg:#F4F2EC; --bg-deep:#ECE9E0; --card:#FBFAF6; --card-hi:#FFFFFF; --line:#E4DFD3; --line-soft:#EDE9DF; --ink:#26241F; --muted:#847E72; --muted-2:#ABA595; --accent:#6E7A55; --accent-ink:#FFFFFF; --accent-soft:rgba(110,122,85,.13); --accent-line:rgba(110,122,85,.38); --danger:#AE5340; --danger-soft:rgba(174,83,64,.12); --shadow:rgba(40,36,28,.07); --grain:.045; }
 html[data-theme="dark"]{ --bg:#1A1917; --bg-deep:#131211; --card:#232120; --card-hi:#2A2724; --line:#332F2A; --line-soft:#2A2724; --ink:#ECE8DF; --muted:#968F82; --muted-2:#6D675C; --accent:#A0AD82; --accent-ink:#17160F; --accent-soft:rgba(160,173,130,.15); --accent-line:rgba(160,173,130,.34); --danger:#CB8875; --danger-soft:rgba(203,136,117,.14); --shadow:rgba(0,0,0,.4); --grain:.05; }
@@ -287,9 +288,14 @@ const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"
 /* ================= état + stockage ================= */
 let S = { week:0, edit:false, scope:"model", panel:false, drawer:false, sheet:null, draft:null,
   theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[],
-  blockName:"Bloc 1 — Accumulation", archive:[] };
+  blockName:"Bloc 1 — Accumulation", archive:[], user:null };
 let pendingVidEx=null, galleryUrls=[];
 let introControllers=[];
+
+/* ================= cloud (Supabase) ================= */
+const SUPA_URL="https://jkcifmiuyeszefrtfman.supabase.co";
+const SUPA_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprY2lmbWl1eWVzemVmcnRmbWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3NjAzODQsImV4cCI6MjEwMTMzNjM4NH0.aum31nUCoEMgGwMp5nk6w-Tf1HBlzBxvX8c9Jog5ME4";
+const supa=(typeof supabase!=="undefined")?supabase.createClient(SUPA_URL,SUPA_ANON_KEY):null;
 
 const mem={};
 const store={
@@ -301,10 +307,37 @@ const store={
   del(k){ delete mem[k]; try{ const L=this.ls(); if(L) L.removeItem(k); }catch(e){} },
 };
 let saveT=null;
-function saveProgram(){ store.set("sb:program",{pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,blockName:S.blockName}); }
-function saveLog(exId, entry, k){ clearTimeout(saveT); saveT=setTimeout(()=>{ store.set("sb:log",S.log); if(exId&&entry) checkPR(exId,entry,k); },300); }
-function saveTheme(){ store.set("sb:theme",S.theme); }
-function saveArchive(){ store.set("sb:archive",S.archive); }
+function saveProgram(){ store.set("sb:program",{pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,blockName:S.blockName}); scheduleCloudSync(); }
+function saveLog(exId, entry, k){ clearTimeout(saveT); saveT=setTimeout(()=>{ store.set("sb:log",S.log); if(exId&&entry) checkPR(exId,entry,k); scheduleCloudSync(); },300); }
+function saveTheme(){ store.set("sb:theme",S.theme); scheduleCloudSync(); }
+function saveArchive(){ store.set("sb:archive",S.archive); scheduleCloudSync(); }
+
+/* ---- cloud sync (offline-first : localStorage reste la source de vérité locale) ---- */
+let cloudT=null;
+function scheduleCloudSync(){
+  if(!supa||!S.user) return;
+  clearTimeout(cloudT);
+  cloudT=setTimeout(pushToCloud,1000);
+}
+function pushToCloud(){
+  if(!supa||!S.user||!navigator.onLine) return;
+  const now=new Date().toISOString();
+  supa.from("user_data").upsert({id:S.user.id, data:buildPayload(), updated_at:now})
+    .then(({error})=>{ if(!error) store.set("sb:syncedAt",Date.parse(now)); else toast("Sync impossible (hors ligne ?)"); })
+    .catch(()=>toast("Sync impossible (hors ligne ?)"));
+}
+function pullFromCloud(){
+  if(!supa||!S.user) return;
+  supa.from("user_data").select("data,updated_at").eq("id",S.user.id).maybeSingle()
+    .then(({data,error})=>{
+      if(error||!data){ pushToCloud(); return; }
+      const remoteTs=Date.parse(data.updated_at);
+      const localTs=store.get("sb:syncedAt")||0;
+      if(remoteTs>localTs){ applyPayload(data.data); render(); store.set("sb:syncedAt",remoteTs); toast("Programme synchronisé"); }
+      else { pushToCloud(); }
+    })
+    .catch(()=>{});
+}
 function checkPR(ex, entry, k){
   if(!ex || ex.mode!=="calc") return;
   const cur=bestTheoOfEntry(ex, entry);
@@ -505,6 +538,7 @@ function renderDrawer(){
   h+=`<button class="drawer-item" data-a="open-records">🏆 Records</button>`;
   h+=`<button class="drawer-item" data-a="open-history">📜 Historique des blocs</button>`;
   h+=`<button class="drawer-item" data-a="open-warmup">🔥 Échauffement</button>`;
+  h+=`<button class="drawer-item" data-a="open-account">☁️ ${S.user?"Compte connecté":"Compte"}</button>`;
   h+=`<div class="drawer-sep"></div>`;
   h+=`<button class="drawer-item" data-a="block-new">＋ Nouveau bloc</button>`;
   h+=`</nav></div>`;
@@ -513,6 +547,7 @@ function renderDrawer(){
 
 /* ---- calculateur d'échauffement ---- */
 let warmupState={ weight:"", step:10, bw:false };
+let accountState={ mode:"signin", email:"", password:"" };
 function warmupOutHtml(){
   const w=parseFloat(warmupState.weight);
   if(!w||w<=0) return `<div class="clip-empty">Entre le poids de ta série de travail pour voir la montée en charge.</div>`;
@@ -694,6 +729,22 @@ function renderSheet(){
     inner+=`<div class="fr"><label>Palier (incrément)</label><input type="number" inputmode="decimal" data-in="warmup" data-f="step" value="${esc(warmupState.step)}" placeholder="kg"></div>`;
     inner+=`<div class="fr"><label>Type de charge</label><div class="seg"><button data-a="warmup-bw" data-v="0" class="${!warmupState.bw?"on":""}">Barre (total)</button><button data-a="warmup-bw" data-v="1" class="${warmupState.bw?"on":""}">Lesté (poids de corps + ajout)</button></div></div>`;
     inner+=`</div><div id="warmup-out">${warmupOutHtml()}</div>`;
+  } else if(sh.type==="account"){
+    inner=`<div class="sheet-h"><div class="t">Compte</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    if(S.user){
+      const syncedAt=store.get("sb:syncedAt");
+      const dt=syncedAt?new Date(syncedAt).toLocaleString("fr-FR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):null;
+      inner+=`<div class="exform"><div class="fr"><label>Connecté</label><div class="rep"><b>${esc(S.user.email)}</b></div></div>`;
+      inner+=`<div class="backup-note">${dt?`Dernière synchro : ${dt}`:"Pas encore synchronisé."}</div>`;
+      inner+=`<button class="btn-del" data-a="account-logout">Se déconnecter</button></div>`;
+    } else {
+      inner+=`<div class="exform">`;
+      inner+=`<div class="fr"><label>Type</label><div class="seg"><button data-a="account-mode" data-v="signin" class="${accountState.mode==="signin"?"on":""}">Se connecter</button><button data-a="account-mode" data-v="signup" class="${accountState.mode==="signup"?"on":""}">Créer un compte</button></div></div>`;
+      inner+=`<div class="fr"><label>Email</label><input type="email" data-in="account" data-f="email" value="${esc(accountState.email)}" autocomplete="email"></div>`;
+      inner+=`<div class="fr"><label>Mot de passe</label><input type="password" data-in="account" data-f="password" value="${esc(accountState.password)}" autocomplete="${accountState.mode==="signup"?"new-password":"current-password"}"></div>`;
+      inner+=`<div class="backup-note">Tes données restent utilisables hors-ligne sans compte. Se connecter active juste la sauvegarde cloud.</div>`;
+      inner+=`<div class="sheet-actions"><button class="btn-ghost" data-a="sheet-close">Annuler</button><button class="btn-primary" data-a="account-submit">${accountState.mode==="signup"?"Créer le compte":"Se connecter"}</button></div></div>`;
+    }
   }
   return `<div class="sheet-backdrop" data-a="backdrop"><div class="sheet">${inner}</div></div>`;
 }
@@ -749,6 +800,23 @@ document.addEventListener("click",e=>{
   else if(a==="open-warmup"){ S.drawer=false; S.sheet={type:"warmup"}; render(); }
   else if(a==="warmup-from"){ warmupState={weight:el.dataset.w, bw:el.dataset.bw==="1"}; S.sheet={type:"warmup"}; render(); }
   else if(a==="warmup-bw"){ warmupState.bw=el.dataset.v==="1"; render(); }
+  else if(a==="open-account"){ S.drawer=false; S.sheet={type:"account"}; render(); }
+  else if(a==="account-mode"){ accountState.mode=el.dataset.v; render(); }
+  else if(a==="account-submit"){
+    if(!supa){ toast("Cloud indisponible"); return; }
+    const email=(accountState.email||"").trim(), password=accountState.password||"";
+    if(!email||!password){ toast("Email et mot de passe requis"); return; }
+    const call = accountState.mode==="signup" ? supa.auth.signUp({email,password}) : supa.auth.signInWithPassword({email,password});
+    call.then(({data,error})=>{
+      if(error){ toast(error.message||"Connexion impossible"); return; }
+      if(!data.session){ toast("Vérifie ta boîte mail pour confirmer le compte"); return; }
+      accountState={mode:"signin",email:"",password:""}; S.sheet=null; render(); toast("Connecté");
+    }).catch(()=>toast("Connexion impossible"));
+  }
+  else if(a==="account-logout"){
+    if(supa) supa.auth.signOut();
+    S.sheet=null; render(); toast("Déconnecté");
+  }
   else if(a==="block-new"){
     if(!confirm("Clôturer le bloc actuel et en démarrer un nouveau ? Le bloc actuel restera consultable dans l'historique.")) return;
     S.draft={name:"Bloc "+((S.archive?S.archive.length:0)+2)}; S.drawer=false; S.sheet={type:"blockname"}; render();
@@ -786,6 +854,7 @@ document.addEventListener("input",e=>{
   else if(t==="ov"){ const k=el.dataset.k, f=el.dataset.f, v=parseFloat(el.value); const ov=S.overrides[k]||(S.overrides[k]={}); if(el.value===""){ delete ov[f]; } else if(!isNaN(v)){ ov[f]=v; } saveProgram(); }
   else if(t==="draft"){ const f=el.dataset.f; S.draft[f]= (f==="oneRM"||f==="sets"||f==="reps") ? parseFloat(el.value)||0 : el.value; }
   else if(t==="warmup"){ warmupState[el.dataset.f]=el.value; const out=document.getElementById("warmup-out"); if(out) out.innerHTML=warmupOutHtml(); }
+  else if(t==="account"){ accountState[el.dataset.f]=el.value; }
 });
 document.addEventListener("change",e=>{ const el=e.target;
   if(el.id==="importf"&&el.files[0]){ importData(el.files[0]); el.value=""; }
@@ -861,18 +930,23 @@ function saveDraft(){
 }
 
 /* export / import */
+function buildPayload(){
+  return {app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme,blockName:S.blockName,archive:S.archive};
+}
+function applyPayload(d){
+  if(d.pdc!=null) S.pdc=d.pdc; if(d.weekRPE) S.weekRPE=d.weekRPE; if(d.library) S.library=d.library; if(d.days) S.days=d.days; if(d.overrides) S.overrides=d.overrides; if(d.log) S.log=d.log; if(d.theme) S.theme=d.theme;
+  if(d.blockName) S.blockName=d.blockName; if(d.archive) S.archive=d.archive;
+  normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveArchive(); saveTheme();
+}
 function exportData(){
-  const payload={app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme,blockName:S.blockName,archive:S.archive};
-  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const blob=new Blob([JSON.stringify(buildPayload(),null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="suivi-street.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
   toast("Programme exporté");
 }
 function importData(file){
   const rd=new FileReader();
   rd.onload=()=>{ try{ const d=JSON.parse(rd.result);
-    if(d.pdc!=null) S.pdc=d.pdc; if(d.weekRPE) S.weekRPE=d.weekRPE; if(d.library) S.library=d.library; if(d.days) S.days=d.days; if(d.overrides) S.overrides=d.overrides; if(d.log) S.log=d.log; if(d.theme) S.theme=d.theme;
-    if(d.blockName) S.blockName=d.blockName; if(d.archive) S.archive=d.archive;
-    normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveArchive(); saveTheme(); render(); toast("Programme importé");
+    applyPayload(d); render(); toast("Programme importé");
   }catch(err){ toast("Fichier illisible"); } };
   rd.readAsText(file);
 }
@@ -908,6 +982,13 @@ function importData(file){
   render(); renderRest();
   try{ runIntroAnim(); }catch(e){}
   setTimeout(hideSplash,2200);
+  if(supa){
+    supa.auth.onAuthStateChange((event,session)=>{
+      S.user = session ? {id:session.user.id, email:session.user.email} : null;
+      if(S.user) pullFromCloud();
+      render();
+    });
+  }
 })();
 
 /* ---- écran d'accueil : dips, muscle-up, tractions en bâtons animés ---- */
