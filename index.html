@@ -532,6 +532,7 @@ function renderPanel(){
   h+=`<div class="backup"><button class="mini" data-a="export">Exporter</button><label class="mini" for="importf">Importer</label><input id="importf" type="file" accept="application/json,.json" hidden></div>`;
   h+=`<div class="backup-note">Fichier de secours de tout ton programme + suivi.</div>`;
   h+=`<button class="reset" data-a="reset">Effacer mon suivi</button>`;
+  h+=`<button class="reset" data-a="reset-all">Réinitialiser l'appareil</button>`;
   h+=`</div></div>`;
   return h;
 }
@@ -812,6 +813,12 @@ document.addEventListener("click",e=>{
   else if(a==="sheet-close"||a==="backdrop"){ if(a==="backdrop"&&e.target.closest(".sheet")) return; revokeGallery(); S.sheet=null; S.draft=null; render(); }
   else if(a==="export"){ exportData(); }
   else if(a==="reset"){ if(confirm("Effacer ton suivi (séries + coches) ? Ton programme et tes 1RM restent.")){ S.log={}; store.del("sb:log"); render(); toast("Suivi effacé"); } }
+  else if(a==="reset-all"){
+    if(!confirm("Tout effacer sur cet appareil (programme, bibliothèque, blocs archivés, suivi) et revenir à l'écran d'accueil ? Les vidéos locales ne sont pas touchées. Si tu es connecté à un compte, tes données restent en sécurité dans le cloud.")) return;
+    if(supa) supa.auth.signOut();
+    store.del("sb:program"); store.del("sb:log"); store.del("sb:archive"); store.del("sb:theme"); store.del("sb:syncedAt");
+    location.reload();
+  }
   else if(a==="menu-open"){ S.drawer=true; render(); }
   else if(a==="drawer-close"||a==="drawer-backdrop"){ if(a==="drawer-backdrop"&&e.target.closest(".drawer")) return; S.drawer=false; render(); }
   else if(a==="open-records"){ S.drawer=false; S.sheet={type:"records"}; render(); }
