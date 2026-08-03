@@ -740,7 +740,7 @@ function renderSheet(){
     } else {
       inner+=`<div class="exform">`;
       if(accountState.notice) inner+=`<div class="editbar"><div class="lbl">✓ Compte créé</div><div class="hint">${esc(accountState.notice)}</div></div>`;
-      inner+=`<div class="fr"><label>Type</label><div class="seg"><button data-a="account-mode" data-v="signin" class="${accountState.mode==="signin"?"on":""}">Se connecter</button><button data-a="account-mode" data-v="signup" class="${accountState.mode==="signup"?"on":""}">Créer un compte</button></div></div>`;
+      inner+=`<div class="fr"><label>Type</label><div class="seg"><button data-a="account-mode" data-v="signin" class="${accountState.mode==="signin"?"on":""}">J'ai déjà un compte</button><button data-a="account-mode" data-v="signup" class="${accountState.mode==="signup"?"on":""}">Nouveau compte</button></div></div>`;
       inner+=`<div class="fr"><label>Email</label><input type="email" data-in="account" data-f="email" value="${esc(accountState.email)}" autocomplete="email"></div>`;
       inner+=`<div class="fr"><label>Mot de passe</label><input type="password" data-in="account" data-f="password" value="${esc(accountState.password)}" autocomplete="${accountState.mode==="signup"?"new-password":"current-password"}"></div>`;
       inner+=`<div class="backup-note">Tes données restent utilisables hors-ligne sans compte. Se connecter active juste la sauvegarde cloud.</div>`;
