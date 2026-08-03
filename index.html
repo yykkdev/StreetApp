@@ -161,6 +161,11 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .hist-day{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:16px 0 8px;}
 .hist-ex{padding:9px 0; border-bottom:1px solid var(--line-soft);}
 .hist-ex:last-child{border-bottom:0}
+.wu-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--line-soft); font-family:'Space Mono',monospace; font-size:13px; color:var(--muted);}
+.wu-row:last-child{border-bottom:0}
+.wu-load{color:var(--ink); font-weight:700;}
+.wu-final{margin-top:12px; padding-top:12px; border-top:1px solid var(--line); font-family:'Space Mono',monospace; font-size:13px; color:var(--ink);}
+.wu-final b{color:var(--accent);}
 .sheet{width:100%; max-width:540px; max-height:86vh; overflow-y:auto; background:var(--bg); border-top-left-radius:20px; border-top-right-radius:20px; border-top:1px solid var(--line); padding:8px 16px calc(24px + env(safe-area-inset-bottom));}
 .sheet-h{position:sticky; top:0; background:var(--bg); display:flex; align-items:center; justify-content:space-between; padding:12px 2px 12px; z-index:1;}
 .sheet-h .t{font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:20px;}
@@ -458,9 +463,26 @@ function renderDrawer(){
   h+=`<div class="drawer-h"><div class="t">${esc(S.blockName)}</div><button class="icon-btn" data-a="drawer-close">✕</button></div>`;
   h+=`<button class="drawer-item" data-a="open-records">🏆 Records</button>`;
   h+=`<button class="drawer-item" data-a="open-history">📜 Historique des blocs</button>`;
+  h+=`<button class="drawer-item" data-a="open-warmup">🔥 Échauffement</button>`;
   h+=`<div class="drawer-sep"></div>`;
   h+=`<button class="drawer-item" data-a="block-new">＋ Nouveau bloc</button>`;
   h+=`</nav></div>`;
+  return h;
+}
+
+/* ---- calculateur d'échauffement ---- */
+let warmupState={ weight:"", bw:false };
+const WARMUP_STEPS=[[40,8],[55,5],[70,3],[85,2],[95,1]];
+function warmupOutHtml(){
+  const w=parseFloat(warmupState.weight);
+  if(!w||w<=0) return `<div class="clip-empty">Entre le poids de ta série de travail pour voir la montée en charge.</div>`;
+  const prefix=warmupState.bw?"+":"";
+  let h="";
+  WARMUP_STEPS.forEach(([pct,reps])=>{
+    const load=warmupState.bw ? r05(w*pct/100) : r25(w*pct/100);
+    h+=`<div class="wu-row"><span>${pct}%</span><span>${reps} rép.</span><span class="wu-load">${prefix}${fr(load)} kg</span></div>`;
+  });
+  h+=`<div class="wu-final">Puis ta série de travail : <b>${prefix}${fr(w)} kg</b></div>`;
   return h;
 }
 
@@ -526,6 +548,7 @@ function renderItem(day,di,it,ii,w){
     if(ex.mode==="calc") h+=`<div class="theo" data-theo="${it.iid}">${bestTheoLine(ex,entry)}</div>`;
     const nvid=S.videos.filter(v=>v.exId===ex.id).length;
     h+=`<button class="vid-btn" data-a="videos" data-id="${ex.id}">📹 Vidéos${nvid?` (${nvid})`:""}</button>`;
+    if(ex.mode==="calc"&&info.kind==="num") h+=`<button class="vid-btn" data-a="warmup-from" data-w="${info.value}" data-bw="${ex.bw?1:0}">🔥 Échauffement</button>`;
     h+=`</div>`;
   }
   h+=`</div>`;
@@ -624,6 +647,12 @@ function renderSheet(){
     inner=`<div class="sheet-h"><div class="t">Nouveau bloc</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
     inner+=`<div class="exform"><div class="fr"><label>Nom du nouveau bloc</label><input type="text" data-in="draft" data-f="name" value="${esc(S.draft?S.draft.name:"")}"></div>`;
     inner+=`<div class="sheet-actions"><button class="btn-ghost" data-a="sheet-close">Annuler</button><button class="btn-primary" data-a="block-confirm">Archiver &amp; démarrer</button></div></div>`;
+  } else if(sh.type==="warmup"){
+    inner=`<div class="sheet-h"><div class="t">Échauffement</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    inner+=`<div class="exform">`;
+    inner+=`<div class="fr"><label>Charge de la série de travail</label><input type="number" inputmode="decimal" data-in="warmup" data-f="weight" value="${esc(warmupState.weight)}" placeholder="kg"></div>`;
+    inner+=`<div class="fr"><label>Type de charge</label><div class="seg"><button data-a="warmup-bw" data-v="0" class="${!warmupState.bw?"on":""}">Barre (total)</button><button data-a="warmup-bw" data-v="1" class="${warmupState.bw?"on":""}">Lesté (poids de corps + ajout)</button></div></div>`;
+    inner+=`</div><div id="warmup-out">${warmupOutHtml()}</div>`;
   }
   return `<div class="sheet-backdrop" data-a="backdrop"><div class="sheet">${inner}</div></div>`;
 }
@@ -676,6 +705,9 @@ document.addEventListener("click",e=>{
   else if(a==="open-records"){ S.drawer=false; S.sheet={type:"records"}; render(); }
   else if(a==="open-history"){ S.drawer=false; S.sheet={type:"history"}; render(); }
   else if(a==="history-open"){ S.sheet={type:"history-detail", archiveId:el.dataset.id}; render(); }
+  else if(a==="open-warmup"){ S.drawer=false; S.sheet={type:"warmup"}; render(); }
+  else if(a==="warmup-from"){ warmupState={weight:el.dataset.w, bw:el.dataset.bw==="1"}; S.sheet={type:"warmup"}; render(); }
+  else if(a==="warmup-bw"){ warmupState.bw=el.dataset.v==="1"; render(); }
   else if(a==="block-new"){
     if(!confirm("Clôturer le bloc actuel et en démarrer un nouveau ? Le bloc actuel restera consultable dans l'historique.")) return;
     S.draft={name:"Bloc "+((S.archive?S.archive.length:0)+2)}; S.drawer=false; S.sheet={type:"blockname"}; render();
@@ -712,6 +744,7 @@ document.addEventListener("input",e=>{
   else if(t==="wave"){ const v=parseFloat(el.value); if(!isNaN(v)){ S.weekRPE[+el.dataset.i]=v; saveProgram(); } }
   else if(t==="ov"){ const k=el.dataset.k, f=el.dataset.f, v=parseFloat(el.value); const ov=S.overrides[k]||(S.overrides[k]={}); if(el.value===""){ delete ov[f]; } else if(!isNaN(v)){ ov[f]=v; } saveProgram(); }
   else if(t==="draft"){ const f=el.dataset.f; S.draft[f]= (f==="oneRM"||f==="sets"||f==="reps") ? parseFloat(el.value)||0 : el.value; }
+  else if(t==="warmup"){ warmupState[el.dataset.f]=el.value; const out=document.getElementById("warmup-out"); if(out) out.innerHTML=warmupOutHtml(); }
 });
 document.addEventListener("change",e=>{ const el=e.target;
   if(el.id==="importf"&&el.files[0]){ importData(el.files[0]); el.value=""; }
