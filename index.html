@@ -289,6 +289,7 @@ let S = { week:0, edit:false, scope:"model", panel:false, drawer:false, sheet:nu
   theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[],
   blockName:"Bloc 1 — Accumulation", archive:[] };
 let pendingVidEx=null, galleryUrls=[];
+let introControllers=[];
 
 const mem={};
 const store={
@@ -910,7 +911,6 @@ function importData(file){
 })();
 
 /* ---- écran d'accueil : dips, muscle-up, tractions en bâtons animés ---- */
-let introControllers=[];
 function hideSplash(){
   const sp=document.getElementById("splash"); if(!sp||sp.classList.contains("hide")) return;
   sp.classList.add("hide");
