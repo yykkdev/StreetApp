@@ -26,6 +26,7 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .eyebrow{font-family:'Space Mono',monospace; font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); display:flex; align-items:center; gap:8px; min-width:0;}
 .eyebrow::before{content:""; width:18px; height:1px; background:var(--accent); flex:none;}
 .top-actions{display:flex; gap:6px; flex:none;}
+.menu-row{display:flex; justify-content:flex-end; margin-top:8px;}
 .theme-tog{display:flex; gap:3px; background:var(--card); border:1px solid var(--line); border-radius:9px; padding:3px;}
 .tt{font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:6px 8px; border:0; background:transparent; color:var(--muted); border-radius:6px; cursor:pointer;}
 .tt.on{background:var(--accent); color:var(--accent-ink);}
@@ -395,10 +396,10 @@ function render(){
   h+=`<div class="wrap">`;
   /* header */
   h+=`<div class="topbar"><div class="eyebrow">${esc(S.blockName)}</div><div class="top-actions">
-    <button class="icon-btn" data-a="menu-open" aria-label="Menu">☰</button>
     <button class="edit-btn ${S.edit?"on":""}" data-a="edit">${S.edit?"OK":"Éditer"}</button>
     <div class="theme-tog"><button class="tt ${S.theme==="light"?"on":""}" data-a="theme" data-v="light">Clair</button><button class="tt ${S.theme==="dark"?"on":""}" data-a="theme" data-v="dark">Sombre</button></div>
   </div></div>`;
+  h+=`<div class="menu-row"><button class="icon-btn" data-a="menu-open" aria-label="Menu">☰</button></div>`;
   h+=renderDrawer();
   h+=`<header class="hero"><h1>Volume</h1><div class="sub">4 semaines · <b>RPE ${fr(S.weekRPE[0])} → ${fr(S.weekRPE[3])}</b></div>`;
   /* profile (1RM des exos calculés uniques par nom de base : on montre pdc + calc lifts) */
