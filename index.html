@@ -150,6 +150,16 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .toast{position:fixed; left:50%; bottom:calc(22px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(20px); background:var(--accent); color:var(--accent-ink); font-family:'Space Mono',monospace; font-weight:700; font-size:12px; padding:12px 18px; border-radius:12px; opacity:0; pointer-events:none; transition:.3s; z-index:80; box-shadow:0 10px 34px var(--shadow); max-width:90vw; text-align:center;}
 .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 .sheet-backdrop{position:fixed; inset:0; z-index:90; background:rgba(0,0,0,.4); display:flex; align-items:flex-end; justify-content:center;}
+.drawer-backdrop{position:fixed; inset:0; z-index:95; background:rgba(0,0,0,.4); display:flex;}
+.drawer{width:min(82vw,300px); height:100%; overflow-y:auto; background:var(--bg); border-right:1px solid var(--line); padding:calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));}
+.drawer-h{display:flex; align-items:center; justify-content:space-between; padding:0 2px 16px;}
+.drawer-h .t{font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:17px;}
+.drawer-item{display:block; width:100%; text-align:left; background:var(--card); border:1px solid var(--line); color:var(--ink); font-size:14px; padding:14px 12px; border-radius:11px; margin-bottom:8px; cursor:pointer;}
+.drawer-item:active{background:var(--accent-soft)}
+.drawer-sep{height:1px; background:var(--line-soft); margin:10px 0 14px;}
+.hist-day{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:16px 0 8px;}
+.hist-ex{padding:9px 0; border-bottom:1px solid var(--line-soft);}
+.hist-ex:last-child{border-bottom:0}
 .sheet{width:100%; max-width:540px; max-height:86vh; overflow-y:auto; background:var(--bg); border-top-left-radius:20px; border-top-right-radius:20px; border-top:1px solid var(--line); padding:8px 16px calc(24px + env(safe-area-inset-bottom));}
 .sheet-h{position:sticky; top:0; background:var(--bg); display:flex; align-items:center; justify-content:space-between; padding:12px 2px 12px; z-index:1;}
 .sheet-h .t{font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:20px;}
@@ -229,8 +239,9 @@ const uid=()=>"x"+Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
 /* ================= état + stockage ================= */
-let S = { week:0, edit:false, scope:"model", panel:false, sheet:null, draft:null,
-  theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[] };
+let S = { week:0, edit:false, scope:"model", panel:false, drawer:false, sheet:null, draft:null,
+  theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[],
+  blockName:"Bloc 1 — Accumulation", archive:[] };
 let pendingVidEx=null, galleryUrls=[];
 
 const mem={};
@@ -243,9 +254,17 @@ const store={
   del(k){ delete mem[k]; try{ const L=this.ls(); if(L) L.removeItem(k); }catch(e){} },
 };
 let saveT=null;
-function saveProgram(){ store.set("sb:program",{pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides}); }
-function saveLog(){ clearTimeout(saveT); saveT=setTimeout(()=>store.set("sb:log",S.log),300); }
+function saveProgram(){ store.set("sb:program",{pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,blockName:S.blockName}); }
+function saveLog(exId, entry, k){ clearTimeout(saveT); saveT=setTimeout(()=>{ store.set("sb:log",S.log); if(exId&&entry) checkPR(exId,entry,k); },300); }
 function saveTheme(){ store.set("sb:theme",S.theme); }
+function saveArchive(){ store.set("sb:archive",S.archive); }
+function checkPR(ex, entry, k){
+  if(!ex || ex.mode!=="calc") return;
+  const cur=bestTheoOfEntry(ex, entry);
+  if(cur==null) return;
+  const prev=allTimeBest(ex.id, k);
+  if(prev==null || cur>prev) toast(`🏆 Nouveau record — ${ex.name} : ${ex.bw?"+":""}${fr(cur)} kg`);
+}
 
 /* ================= programme par défaut ================= */
 function seed(){
@@ -291,17 +310,18 @@ function itemCfg(di,ii,w){
   return {ex,it,ov,sets,reps,rpe,skip};
 }
 function gmult(rpe,reps){ const row=T[clampRpe(rpe)]||T[6]; return (row[(reps>=1&&reps<=10)?reps-1:4])/100; }
-function e1rm(ex, st){
+function e1rm(ex, st, pdc){
   if(!ex||ex.mode!=="calc"||!st) return null;
+  if(pdc==null) pdc=S.pdc;
   const c=parseFloat(st.charge), reps=parseInt(st.reps,10); let rpe=parseFloat(st.rpe);
   if(!c||!reps||isNaN(rpe)) return null;
   rpe=clampRpe(rpe); if(reps<1||reps>10) return null;
   const m=T[rpe][reps-1]/100;
-  return ex.bw ? r05((S.pdc+c)/m - S.pdc) : r05(c/m);
+  return ex.bw ? r05((pdc+c)/m - pdc) : r05(c/m);
 }
-function bestTheoOfEntry(ex, entry){
+function bestTheoOfEntry(ex, entry, pdc){
   let best=null;
-  if(entry && Array.isArray(entry.sets)) entry.sets.forEach(s=>{ const v=e1rm(ex,s); if(v!=null&&(best==null||v>best)) best=v; });
+  if(entry && Array.isArray(entry.sets)) entry.sets.forEach(s=>{ const v=e1rm(ex,s,pdc); if(v!=null&&(best==null||v>best)) best=v; });
   return best;
 }
 function bestTheo(exId,w){
@@ -309,6 +329,29 @@ function bestTheo(exId,w){
   S.days.forEach((day)=>day.items.forEach((it)=>{
     if(it.exId===exId){ const v=bestTheoOfEntry(ex, S.log[w+"|"+it.iid]); if(v!=null&&(best==null||v>best)) best=v; }
   }));
+  return best;
+}
+function blockBest(exId){ let best=null; for(let w=0;w<4;w++){ const v=bestTheo(exId,w); if(v!=null&&(best==null||v>best)) best=v; } return best; }
+function allTimeBest(exId, excludeKey){
+  let best=null;
+  for(let w=0;w<4;w++){
+    S.days.forEach(day=>day.items.forEach(it=>{
+      if(it.exId!==exId) return;
+      const k=w+"|"+it.iid; if(k===excludeKey) return;
+      const v=bestTheoOfEntry(S.library[exId], S.log[k]);
+      if(v!=null&&(best==null||v>best)) best=v;
+    }));
+  }
+  (S.archive||[]).forEach(blk=>{
+    (blk.days||[]).forEach(day=>day.items.forEach(it=>{
+      if(it.exId!==exId) return;
+      const ex=blk.library[exId]; if(!ex) return;
+      for(let w=0;w<4;w++){
+        const v=bestTheoOfEntry(ex, blk.log && blk.log[w+"|"+it.iid], blk.pdc);
+        if(v!=null&&(best==null||v>best)) best=v;
+      }
+    }));
+  });
   return best;
 }
 function setsPlanned(cfg){ if(cfg.ex.mode==="calc") return cfg.sets||1; return parseInt(cfg.ex.scheme,10)||3; }
@@ -351,10 +394,12 @@ function render(){
   let h="";
   h+=`<div class="wrap">`;
   /* header */
-  h+=`<div class="topbar"><div class="eyebrow">Bloc 1 — Accumulation</div><div class="top-actions">
+  h+=`<div class="topbar"><div class="eyebrow">${esc(S.blockName)}</div><div class="top-actions">
+    <button class="icon-btn" data-a="menu-open" aria-label="Menu">☰</button>
     <button class="edit-btn ${S.edit?"on":""}" data-a="edit">${S.edit?"OK":"Éditer"}</button>
     <div class="theme-tog"><button class="tt ${S.theme==="light"?"on":""}" data-a="theme" data-v="light">Clair</button><button class="tt ${S.theme==="dark"?"on":""}" data-a="theme" data-v="dark">Sombre</button></div>
   </div></div>`;
+  h+=renderDrawer();
   h+=`<header class="hero"><h1>Volume</h1><div class="sub">4 semaines · <b>RPE ${fr(S.weekRPE[0])} → ${fr(S.weekRPE[3])}</b></div>`;
   /* profile (1RM des exos calculés uniques par nom de base : on montre pdc + calc lifts) */
   h+=`<div class="profile">
@@ -403,6 +448,18 @@ function renderPanel(){
   h+=`<div class="backup-note">Fichier de secours de tout ton programme + suivi.</div>`;
   h+=`<button class="reset" data-a="reset">Effacer mon suivi</button>`;
   h+=`</div></div>`;
+  return h;
+}
+
+function renderDrawer(){
+  if(!S.drawer) return "";
+  let h=`<div class="drawer-backdrop" data-a="drawer-backdrop"><nav class="drawer">`;
+  h+=`<div class="drawer-h"><div class="t">${esc(S.blockName)}</div><button class="icon-btn" data-a="drawer-close">✕</button></div>`;
+  h+=`<button class="drawer-item" data-a="open-records">🏆 Records</button>`;
+  h+=`<button class="drawer-item" data-a="open-history">📜 Historique des blocs</button>`;
+  h+=`<div class="drawer-sep"></div>`;
+  h+=`<button class="drawer-item" data-a="block-new">＋ Nouveau bloc</button>`;
+  h+=`</nav></div>`;
   return h;
 }
 
@@ -520,6 +577,52 @@ function renderSheet(){
       const dt=new Date(c.date).toLocaleString("fr-FR",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
       inner+=`<div class="clip"><div class="clip-top"><span class="clip-date">${dt}</span><button class="icon-btn sm danger" data-a="vid-del" data-id="${c.id}">✕</button></div><video data-clip="${c.id}" controls preload="metadata" playsinline></video></div>`;
     });
+  } else if(sh.type==="records"){
+    inner=`<div class="sheet-h"><div class="t">Records</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    const calcs=Object.values(S.library).filter(ex=>ex.mode==="calc");
+    if(!calcs.length) inner+=`<div class="clip-empty">Aucun exercice calculé pour l'instant.</div>`;
+    calcs.forEach(ex=>{
+      const best=allTimeBest(ex.id);
+      const val = best==null ? "—" : `${ex.bw?"+":""}${fr(best)} kg`;
+      inner+=`<div class="lib-item"><div class="l"><div class="nm">${esc(ex.name)}</div><div class="mt">${CATLABEL[ex.cat]||"Autre"}</div></div><span class="rep">${val}</span></div>`;
+    });
+  } else if(sh.type==="history"){
+    inner=`<div class="sheet-h"><div class="t">Historique des blocs</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    const list=[...(S.archive||[])].sort((a,b)=>b.archivedAt.localeCompare(a.archivedAt));
+    if(!list.length) inner+=`<div class="clip-empty">Aucun bloc archivé pour l'instant.</div>`;
+    list.forEach(blk=>{
+      const dt=new Date(blk.archivedAt).toLocaleString("fr-FR",{day:"2-digit",month:"short",year:"numeric"});
+      inner+=`<div class="lib-item" data-a="history-open" data-id="${blk.id}"><div class="l"><div class="nm">${esc(blk.name)}</div><div class="mt">Archivé le ${dt} · 4 semaines</div></div><span class="rep">›</span></div>`;
+    });
+  } else if(sh.type==="history-detail"){
+    const blk=(S.archive||[]).find(a=>a.id===sh.archiveId);
+    if(!blk){
+      inner=`<div class="sheet-h"><div class="t">Bloc introuvable</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    } else {
+      inner=`<div class="sheet-h"><div class="t">${esc(blk.name)}</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+      (blk.days||[]).forEach(day=>{
+        inner+=`<div class="hist-day">${esc(day.name)}</div>`;
+        day.items.forEach(it=>{
+          const ex=blk.library[it.exId]; if(!ex) return;
+          inner+=`<div class="hist-ex"><div class="ex-name">${esc(ex.name)}</div>`;
+          let any=false;
+          for(let w=0;w<4;w++){
+            const entry=blk.log && blk.log[w+"|"+it.iid];
+            if(!entry||!Array.isArray(entry.sets)) continue;
+            const parts=entry.sets.filter(s=>s.charge||s.reps||s.rpe).map(s=>`${s.charge??"—"}kg×${s.reps??"—"}@${s.rpe??"—"}`);
+            if(!parts.length) continue;
+            any=true;
+            inner+=`<div class="rep">S${w+1} : ${parts.join(" · ")}</div>`;
+          }
+          if(!any) inner+=`<div class="rep">Pas de séries notées</div>`;
+          inner+=`</div>`;
+        });
+      });
+    }
+  } else if(sh.type==="blockname"){
+    inner=`<div class="sheet-h"><div class="t">Nouveau bloc</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    inner+=`<div class="exform"><div class="fr"><label>Nom du nouveau bloc</label><input type="text" data-in="draft" data-f="name" value="${esc(S.draft?S.draft.name:"")}"></div>`;
+    inner+=`<div class="sheet-actions"><button class="btn-ghost" data-a="sheet-close">Annuler</button><button class="btn-primary" data-a="block-confirm">Archiver &amp; démarrer</button></div></div>`;
   }
   return `<div class="sheet-backdrop" data-a="backdrop"><div class="sheet">${inner}</div></div>`;
 }
@@ -567,14 +670,39 @@ document.addEventListener("click",e=>{
   else if(a==="sheet-close"||a==="backdrop"){ if(a==="backdrop"&&e.target.closest(".sheet")) return; revokeGallery(); S.sheet=null; S.draft=null; render(); }
   else if(a==="export"){ exportData(); }
   else if(a==="reset"){ if(confirm("Effacer ton suivi (séries + coches) ? Ton programme et tes 1RM restent.")){ S.log={}; store.del("sb:log"); render(); toast("Suivi effacé"); } }
+  else if(a==="menu-open"){ S.drawer=true; render(); }
+  else if(a==="drawer-close"||a==="drawer-backdrop"){ if(a==="drawer-backdrop"&&e.target.closest(".drawer")) return; S.drawer=false; render(); }
+  else if(a==="open-records"){ S.drawer=false; S.sheet={type:"records"}; render(); }
+  else if(a==="open-history"){ S.drawer=false; S.sheet={type:"history"}; render(); }
+  else if(a==="history-open"){ S.sheet={type:"history-detail", archiveId:el.dataset.id}; render(); }
+  else if(a==="block-new"){
+    if(!confirm("Clôturer le bloc actuel et en démarrer un nouveau ? Le bloc actuel restera consultable dans l'historique.")) return;
+    S.draft={name:"Bloc "+((S.archive?S.archive.length:0)+2)}; S.drawer=false; S.sheet={type:"blockname"}; render();
+  }
+  else if(a==="block-confirm"){
+    const newName=(S.draft&&S.draft.name||"").trim()||"Nouveau bloc";
+    Object.values(S.library).forEach(ex=>{
+      if(ex.mode!=="calc") return;
+      const best=blockBest(ex.id);
+      if(best!=null&&best>ex.oneRM) ex.oneRM=best;
+    });
+    const snap={ id:uid(), name:S.blockName, archivedAt:new Date().toISOString(),
+      pdc:S.pdc, weekRPE:[...S.weekRPE], library:JSON.parse(JSON.stringify(S.library)),
+      days:JSON.parse(JSON.stringify(S.days)), overrides:JSON.parse(JSON.stringify(S.overrides)),
+      log:JSON.parse(JSON.stringify(S.log)) };
+    S.archive.push(snap); saveArchive();
+    S.log={}; store.del("sb:log"); S.week=0; S.blockName=newName; S.sheet=null; S.draft=null;
+    saveProgram(); render(); toast("Nouveau bloc démarré");
+  }
 });
 
 /* inputs (texte : pas de re-render, on garde le focus) */
 document.addEventListener("input",e=>{
   const el=e.target.closest("[data-in]"); if(!el) return;
   const t=el.dataset.in;
-  if(t==="set"){ const k=el.dataset.k, f=el.dataset.f, i=+el.dataset.i; const e=S.log[k]||(S.log[k]={sets:[],open:true}); if(!e.sets)e.sets=[]; while(e.sets.length<=i) e.sets.push({}); e.sets[i][f]=el.value; saveLog();
+  if(t==="set"){ const k=el.dataset.k, f=el.dataset.f, i=+el.dataset.i; const e=S.log[k]||(S.log[k]={sets:[],open:true}); if(!e.sets)e.sets=[]; while(e.sets.length<=i) e.sets.push({}); e.sets[i][f]=el.value;
     const exEl=el.closest(".ex"); const ex=exOfKey(k);
+    saveLog(ex, e, k);
     if(ex&&ex.mode==="calc"){ const line=exEl.querySelector(".theo"); if(line) line.textContent=bestTheoLine(ex,e); }
     updateExDone(exEl); }
   else if(t==="dayname"){ S.days[+el.dataset.di].name=el.value; saveProgram(); }
@@ -659,7 +787,7 @@ function saveDraft(){
 
 /* export / import */
 function exportData(){
-  const payload={app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme};
+  const payload={app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme,blockName:S.blockName,archive:S.archive};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="suivi-street.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
   toast("Programme exporté");
@@ -668,7 +796,8 @@ function importData(file){
   const rd=new FileReader();
   rd.onload=()=>{ try{ const d=JSON.parse(rd.result);
     if(d.pdc!=null) S.pdc=d.pdc; if(d.weekRPE) S.weekRPE=d.weekRPE; if(d.library) S.library=d.library; if(d.days) S.days=d.days; if(d.overrides) S.overrides=d.overrides; if(d.log) S.log=d.log; if(d.theme) S.theme=d.theme;
-    normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveTheme(); render(); toast("Programme importé");
+    if(d.blockName) S.blockName=d.blockName; if(d.archive) S.archive=d.archive;
+    normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveArchive(); saveTheme(); render(); toast("Programme importé");
   }catch(err){ toast("Fichier illisible"); } };
   rd.readAsText(file);
 }
@@ -695,10 +824,12 @@ function importData(file){
     saveProgram(); store.set("sb:log",S.log);
   } else {
     S.pdc=prog.pdc; S.weekRPE=prog.weekRPE||[6,6.5,7,7.5]; S.library=prog.library; S.days=prog.days; S.overrides=prog.overrides||{};
+    S.blockName=prog.blockName||"Bloc 1 — Accumulation";
     S.log=store.get("sb:log")||{};
   }
   normalizeLog();
   S.videos = store.get("sb:videos") || [];
+  S.archive = store.get("sb:archive") || [];
   render(); renderRest();
 })();
 </script>
