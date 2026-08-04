@@ -377,7 +377,8 @@ function genCoachCode(){
 }
 function claimCoachCode(code){
   if(!supa||!S.user) return;
-  supa.from("coach_links").update({coach_id:S.user.id}).eq("code",code.trim().toUpperCase()).is("coach_id",null).select()
+  const clean=code.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
+  supa.from("coach_links").update({coach_id:S.user.id}).eq("code",clean).is("coach_id",null).select()
     .then(({data,error})=>{
       if(error){ toast("Erreur : "+error.message); return; }
       if(!data||!data.length){ toast("Code invalide ou déjà utilisé"); return; }
@@ -898,7 +899,7 @@ function renderSheet(){
         linked.forEach(l=>inner+=`<div class="lib-item"><div class="l"><div class="nm">Coach</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><button class="icon-btn sm danger" data-a="revoke-coach-link" data-id="${l.id}">✕</button></div>`);
       }
       inner+=`<h3>Devenir coach</h3>`;
-      inner+=`<div class="fr"><label>Code reçu de ton athlète</label><input type="text" id="coachCodeInput" placeholder="ABC123" onkeydown="if(event.key==='Enter'){event.preventDefault();document.querySelector('[data-a=claim-coach-code]').click();}"></div>`;
+      inner+=`<div class="fr"><label>Code reçu de ton athlète</label><input type="text" id="coachCodeInput" placeholder="ABC123" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();document.querySelector('[data-a=claim-coach-code]').click();}"></div>`;
       inner+=`<button class="mini" data-a="claim-coach-code">Entrer le code</button>`;
       if(asCoach.length){
         inner+=`<h3>Mes athlètes</h3>`;
