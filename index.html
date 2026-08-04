@@ -1076,6 +1076,8 @@ function driveStick(ids, poses, opts){
         legs=document.getElementById(ids.legs), head=document.getElementById(ids.head);
   if(!arm||!torso||!legs||!head) return null;
   const loop=!!opts.loop, headOffset=opts.headOffset!=null?opts.headOffset:12, headFollows=opts.headFollows==="hip"?"hip":"sh";
+  const bar=opts.bar ? document.getElementById(opts.bar.id) : null;
+  const barFollows=opts.bar&&opts.bar.follows==="feet"?"feet":"sh", barHalfW=opts.bar?opts.bar.width/2:0;
   const total=poses[poses.length-1].t;
   const ease=t=>t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
   const lerp=(a,b,r)=>a+(b-a)*r;
@@ -1094,6 +1096,11 @@ function driveStick(ids, poses, opts){
     legs.setAttribute("x2",feet[0]); legs.setAttribute("y2",feet[1]);
     const hp=headFollows==="hip"?hip:sh;
     head.setAttribute("cx",hp[0]); head.setAttribute("cy",hp[1]-headOffset);
+    if(bar){
+      const bp=barFollows==="feet"?feet:sh;
+      bar.setAttribute("x1",bp[0]-barHalfW); bar.setAttribute("y1",bp[1]);
+      bar.setAttribute("x2",bp[0]+barHalfW); bar.setAttribute("y2",bp[1]);
+    }
   }
   let running=true;
   const start=performance.now();
@@ -1132,21 +1139,27 @@ function driveLinear(update, poses, opts){
   requestAnimationFrame(frame);
   return { stop(){ running=false; } };
 }
-function stickSvg(scaleTransform, barX, arm, torso, legs, head, headR, poses, headFollows, headOffset){
-  const p0=poses[0], sh=p0.sh, hip=p0.hip, feet=p0.feet;
-  const hp=headFollows==="hip"?hip:sh, ho=headOffset!=null?headOffset:12;
-  return `<svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="${scaleTransform}">
-    <line class="mu-bar" x1="${-barX}" y1="0" x2="${barX}" y2="0"/>
-    <line class="mu-arm" id="${arm}" x1="0" y1="0" x2="${sh[0]}" y2="${sh[1]}"/>
-    <line class="mu-torso" id="${torso}" x1="${sh[0]}" y1="${sh[1]}" x2="${hip[0]}" y2="${hip[1]}"/>
-    <line class="mu-legs" id="${legs}" x1="${hip[0]}" y1="${hip[1]}" x2="${feet[0]}" y2="${feet[1]}"/>
-    <circle class="mu-head" id="${head}" cx="${hp[0]}" cy="${hp[1]-ho}" r="${headR}"/>
+function stickSvg(cfg){
+  const poses=cfg.poses, p0=poses[0], sh=p0.sh, hip=p0.hip, feet=p0.feet;
+  const headFollows=cfg.headFollows==="hip"?"hip":"sh";
+  const hp=headFollows==="hip"?hip:sh, ho=cfg.headOffset!=null?cfg.headOffset:12;
+  const barFollows=cfg.barFollows==="feet"?"feet":"sh";
+  const bp=barFollows==="feet"?feet:sh, bw=cfg.barWidth!=null?cfg.barWidth:cfg.barX*2, bhw=bw/2;
+  const barAttrs = cfg.barId
+    ? `id="${cfg.barId}" x1="${bp[0]-bhw}" y1="${bp[1]}" x2="${bp[0]+bhw}" y2="${bp[1]}"`
+    : `x1="${-cfg.barX}" y1="0" x2="${cfg.barX}" y2="0"`;
+  return `<svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="${cfg.transform}">
+    <line class="mu-bar" ${barAttrs}/>
+    <line class="mu-arm" id="${cfg.arm}" x1="0" y1="0" x2="${sh[0]}" y2="${sh[1]}"/>
+    <line class="mu-torso" id="${cfg.torso}" x1="${sh[0]}" y1="${sh[1]}" x2="${hip[0]}" y2="${hip[1]}"/>
+    <line class="mu-legs" id="${cfg.legs}" x1="${hip[0]}" y1="${hip[1]}" x2="${feet[0]}" y2="${feet[1]}"/>
+    <circle class="mu-head" id="${cfg.head}" cx="${hp[0]}" cy="${hp[1]-ho}" r="${cfg.headR}"/>
   </g></svg>`;
 }
 function splashHtml(mode){
   if(mode==="power"){
     return `<div class="mu-row">
-      ${stickSvg("translate(70,10) scale(2.0)",22,"sqArm","sqTorso","sqLegs","sqHead",4,SQ_POSES)}
+      ${stickSvg({transform:"translate(70,10) scale(2.0)", barX:22, barId:"sqBar", barFollows:"sh", barWidth:22, arm:"sqArm",torso:"sqTorso",legs:"sqLegs",head:"sqHead",headR:4, poses:SQ_POSES})}
       <svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="translate(70,85) scale(1.9)">
         <line class="mu-bar" x1="-28" y1="14" x2="12" y2="14"/>
         <line class="mu-legs" x1="-24" y1="0" x2="-34" y2="16"/>
@@ -1156,7 +1169,7 @@ function splashHtml(mode){
         <line class="mu-arm" id="bpArm" x1="16" y1="0" x2="16" y2="${BP_POSES[0].y}"/>
         <line class="mu-bar" id="bpBar" x1="2" y1="${BP_POSES[0].y}" x2="30" y2="${BP_POSES[0].y}"/>
       </g></svg>
-      ${stickSvg("translate(70,150) scale(1.6)",22,"dlArm","dlTorso","dlLegs","dlHead",4,DL_POSES,"hip",10)}
+      ${stickSvg({transform:"translate(70,150) scale(1.6)", barX:22, barId:"dlBar", barFollows:"feet", barWidth:22, arm:"dlArm",torso:"dlTorso",legs:"dlLegs",head:"dlHead",headR:4, poses:DL_POSES, headFollows:"hip", headOffset:10})}
     </div>`;
   }
   if(mode==="body"){
@@ -1173,9 +1186,9 @@ function splashHtml(mode){
     </g></svg></div>`;
   }
   return `<div class="mu-row">
-    ${stickSvg("translate(70,90) scale(1.8)",17,"dpArm","dpTorso","dpLegs","dpHead",4,DIP_POSES)}
-    ${stickSvg("translate(70,58)",46,"muArm","muTorso","muLegs","muHead",7,MU_POSES)}
-    ${stickSvg("translate(70,58)",46,"puArm","puTorso","puLegs","puHead",7,PU_POSES)}
+    ${stickSvg({transform:"translate(70,90) scale(1.8)", barX:17, arm:"dpArm",torso:"dpTorso",legs:"dpLegs",head:"dpHead",headR:4, poses:DIP_POSES})}
+    ${stickSvg({transform:"translate(70,58)", barX:46, arm:"muArm",torso:"muTorso",legs:"muLegs",head:"muHead",headR:7, poses:MU_POSES})}
+    ${stickSvg({transform:"translate(70,58)", barX:46, arm:"puArm",torso:"puTorso",legs:"puLegs",head:"puHead",headR:7, poses:PU_POSES})}
   </div>`;
 }
 function runIntroAnim(){
@@ -1187,8 +1200,8 @@ function runIntroAnim(){
   setTimeout(hideSplash, MU_POSES[MU_POSES.length-1].t + 150);
 }
 function runPowerAnim(){
-  introControllers.push(driveStick({arm:"sqArm",torso:"sqTorso",legs:"sqLegs",head:"sqHead"}, SQ_POSES, {loop:true}));
-  introControllers.push(driveStick({arm:"dlArm",torso:"dlTorso",legs:"dlLegs",head:"dlHead"}, DL_POSES, {loop:true, headFollows:"hip", headOffset:10}));
+  introControllers.push(driveStick({arm:"sqArm",torso:"sqTorso",legs:"sqLegs",head:"sqHead"}, SQ_POSES, {loop:true, bar:{id:"sqBar", follows:"sh", width:22}}));
+  introControllers.push(driveStick({arm:"dlArm",torso:"dlTorso",legs:"dlLegs",head:"dlHead"}, DL_POSES, {loop:true, headFollows:"hip", headOffset:10, bar:{id:"dlBar", follows:"feet", width:22}}));
   introControllers.push(driveLinear(y=>{
     const arm=document.getElementById("bpArm"), bar=document.getElementById("bpBar");
     if(arm) arm.setAttribute("y2",y);
