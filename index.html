@@ -99,6 +99,7 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .icon-btn{flex:none; width:34px; height:34px; border-radius:8px; border:1px solid var(--line); background:var(--bg-deep); color:var(--muted); font-size:15px; cursor:pointer; display:grid; place-items:center; padding:0;}
 .icon-btn:active{transform:translateY(1px)}
 .icon-btn.danger{color:var(--danger); border-color:var(--danger-soft);}
+.icon-btn.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
 .day-tools{display:flex; gap:6px; flex:none;}
 .ex{border-top:1px solid var(--line-soft); padding:12px 16px;}
 .ex.done{background:var(--accent-soft); border-left:3px solid var(--accent); padding-left:13px;}
@@ -201,6 +202,7 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .setrow input:focus{outline:2px solid var(--accent-line); outline-offset:1px; border-color:var(--accent);}
 .icon-btn.sm{width:28px; height:28px; font-size:12px;}
 .add-set{width:100%; background:transparent; border:1px dashed var(--line); color:var(--accent); font-family:'Space Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; padding:9px; border-radius:8px; cursor:pointer; margin-top:2px;}
+.ex-note{width:100%; margin-top:8px; background:var(--bg-deep); border:1px solid var(--line); border-radius:8px; padding:9px 10px; color:var(--ink); font-family:'Inter',sans-serif; font-size:13px;}
 .rest-fab{position:fixed; right:calc(16px + env(safe-area-inset-right)); bottom:calc(20px + env(safe-area-inset-bottom)); width:52px; height:52px; border-radius:50%; background:var(--accent); color:var(--accent-ink); border:0; font-size:22px; box-shadow:0 6px 20px var(--shadow); z-index:70; cursor:pointer;}
 .rest-panel{position:fixed; right:calc(16px + env(safe-area-inset-right)); bottom:calc(20px + env(safe-area-inset-bottom)); width:224px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 12px 38px var(--shadow); z-index:70;}
 .rest-top{display:flex; justify-content:space-between; align-items:center;}
@@ -262,13 +264,14 @@ const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"
 /* ================= état + stockage ================= */
 let S = { week:0, edit:false, scope:"model", panel:false, drawer:false, sheet:null, draft:null,
   theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[],
-  blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice", mode:"street" };
+  blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice", mode:"street", notes:{} };
 let pendingVidEx=null, galleryUrls=[];
 const MODES = {
   street:{word:"STREET", sub:"Programme de street-lifting"},
   power:{word:"POWER", sub:"Programme de force / powerlifting"},
   body:{word:"BODY", sub:"Programme de musculation"},
 };
+const FEELING_METRICS=[["fatigue","Fatigue"],["sommeil","Sommeil"],["stress","Stress"],["douleur","Douleur"]];
 let introControllers=[];
 /* poses définies une seule fois : utilisées pour le rendu statique initial (pas de figure
    invisible tant que l'animation n'a pas démarré) ET pour piloter l'animation elle-même */
@@ -321,6 +324,7 @@ function saveProgram(){ store.set("sb:program",{pdc:S.pdc,weekRPE:S.weekRPE,libr
 function saveLog(exId, entry, k){ clearTimeout(saveT); saveT=setTimeout(()=>{ store.set("sb:log",S.log); if(exId&&entry) checkPR(exId,entry,k); scheduleCloudSync(); },300); }
 function saveTheme(){ store.set("sb:theme",S.theme); scheduleCloudSync(); }
 function saveArchive(){ store.set("sb:archive",S.archive); scheduleCloudSync(); }
+function saveNotes(){ store.set("sb:notes",S.notes); scheduleCloudSync(); }
 
 /* ---- cloud sync (offline-first : localStorage reste la source de vérité locale) ---- */
 let cloudT=null;
@@ -615,6 +619,9 @@ function renderDay(day,di,w){
     h+=`<svg class="ring" viewBox="0 0 38 38"><circle class="bg" cx="19" cy="19" r="15"></circle><circle class="fg" cx="19" cy="19" r="15" transform="rotate(-90 19 19)" stroke-dasharray="${RING_C.toFixed(1)}" stroke-dashoffset="${(RING_C*(1-(total?done/total:0))).toFixed(1)}"></circle><text class="ring-txt" x="19" y="22.5" text-anchor="middle">${done}/${total}</text></svg>`;
     const tonnage=dayTonnage(day,w);
     h+=`<div class="day-title"><div class="d">${esc(day.name)}</div><div class="t">${total} exercice${total>1?"s":""}${tonnage>0?` · <b>${fr(tonnage)} kg</b>`:""}</div></div>`;
+    const dn=S.notes[w+"|"+day.id];
+    const hasNote=dn&&(dn.fatigue||dn.sommeil||dn.stress||dn.douleur||dn.note);
+    h+=`<button class="icon-btn ${hasNote?"on":""}" data-a="open-daynote" data-w="${w}" data-day="${day.id}" aria-label="Ressenti du jour">📓</button>`;
   }
   h+=`</div>`;
   day.items.forEach((it,ii)=>{ h+=renderItem(day,di,it,ii,w); });
@@ -663,6 +670,7 @@ function renderItem(day,di,it,ii,w){
         +`</div>`;
     }
     h+=`<button class="add-set" data-a="set-add" data-k="${k}">＋ série</button></div>`;
+    h+=`<input type="text" class="ex-note" data-in="note" data-k="${k}" value="${esc(entry.note||"")}" placeholder="Note (optionnel)">`;
     if(ex.mode==="calc") h+=`<div class="theo" data-theo="${it.iid}">${bestTheoLine(ex,entry)}</div>`;
     const nvid=S.videos.filter(v=>v.exId===ex.id).length;
     h+=`<button class="vid-btn" data-a="videos" data-id="${ex.id}">📹 Vidéos${nvid?` (${nvid})`:""}</button>`;
@@ -744,6 +752,13 @@ function renderSheet(){
       inner=`<div class="sheet-h"><div class="t">${esc(blk.name)}</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
       (blk.days||[]).forEach(day=>{
         inner+=`<div class="hist-day">${esc(day.name)}</div>`;
+        for(let w=0;w<4;w++){
+          const dn=blk.notes && blk.notes[w+"|"+day.id];
+          if(!dn||!(dn.fatigue||dn.sommeil||dn.stress||dn.douleur||dn.note)) continue;
+          const bits=FEELING_METRICS.filter(([f])=>dn[f]).map(([f,label])=>`${label} ${dn[f]}/5`);
+          if(dn.note) bits.push(`« ${esc(dn.note)} »`);
+          inner+=`<div class="rep">S${w+1} · ${bits.join(" · ")}</div>`;
+        }
         day.items.forEach(it=>{
           const ex=blk.library[it.exId]; if(!ex) return;
           inner+=`<div class="hist-ex"><div class="ex-name">${esc(ex.name)}</div>`;
@@ -752,9 +767,9 @@ function renderSheet(){
             const entry=blk.log && blk.log[w+"|"+it.iid];
             if(!entry||!Array.isArray(entry.sets)) continue;
             const parts=entry.sets.filter(s=>s.charge||s.reps||s.rpe).map(s=>`${s.charge??"—"}kg×${s.reps??"—"}@${s.rpe??"—"}`);
-            if(!parts.length) continue;
+            if(!parts.length && !entry.note) continue;
             any=true;
-            inner+=`<div class="rep">S${w+1} : ${parts.join(" · ")}</div>`;
+            inner+=`<div class="rep">S${w+1} : ${parts.join(" · ")||"—"}${entry.note?` · « ${esc(entry.note)} »`:""}</div>`;
           }
           if(!any) inner+=`<div class="rep">Pas de séries notées</div>`;
           inner+=`</div>`;
@@ -788,6 +803,18 @@ function renderSheet(){
     inner=`<div class="sheet-h"><div class="t">Discipline</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
     inner+=`<div class="exform"><div class="fr"><label>Discipline</label>${renderModeSelector()}</div>`;
     inner+=`<div class="backup-note">Change l'habillage (nom, écran de démarrage). Ton programme reste identique.</div></div>`;
+  } else if(sh.type==="daynote"){
+    const key=sh.week+"|"+sh.dayId;
+    const dn=S.notes[key]||{};
+    inner=`<div class="sheet-h"><div class="t">Ressenti · ${esc(sh.dayName)} S${sh.week+1}</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    inner+=`<div class="exform">`;
+    FEELING_METRICS.forEach(([f,label])=>{
+      inner+=`<div class="fr"><label>${label}</label><div class="seg">`;
+      for(let lvl=1;lvl<=5;lvl++) inner+=`<button data-a="daynote-level" data-k="${key}" data-f="${f}" data-v="${lvl}" class="${dn[f]===lvl?"on":""}">${lvl}</button>`;
+      inner+=`</div></div>`;
+    });
+    inner+=`<div class="fr"><label>Note libre</label><input type="text" data-in="daynote" data-k="${key}" value="${esc(dn.note||"")}" placeholder="Comment s'est passée la séance ?"></div>`;
+    inner+=`</div>`;
   }
   return `<div class="sheet-backdrop" data-a="backdrop"><div class="sheet">${inner}</div></div>`;
 }
@@ -852,6 +879,17 @@ document.addEventListener("click",e=>{
   else if(a==="open-account"){ S.drawer=false; S.sheet={type:"account"}; render(); }
   else if(a==="open-mode"){ S.drawer=false; S.sheet={type:"mode"}; render(); }
   else if(a==="set-mode"){ S.mode=el.dataset.v; if(!S.landing) saveProgram(); render(); }
+  else if(a==="open-daynote"){
+    const w=+el.dataset.w, dayId=el.dataset.day;
+    const day=S.days.find(d=>d.id===dayId);
+    S.sheet={type:"daynote", week:w, dayId, dayName:day?day.name:""};
+    render();
+  }
+  else if(a==="daynote-level"){
+    const key=el.dataset.k, f=el.dataset.f, v=+el.dataset.v;
+    const n=S.notes[key]||(S.notes[key]={});
+    n[f]=(n[f]===v)?null:v; saveNotes(); render();
+  }
   else if(a==="account-mode"){ accountState.mode=el.dataset.v; accountState.notice=null; render(); }
   else if(a==="landing-login"){ S.landingView="login"; render(); }
   else if(a==="landing-back"){ S.landingView="choice"; render(); }
@@ -893,9 +931,9 @@ document.addEventListener("click",e=>{
     const snap={ id:uid(), name:S.blockName, archivedAt:new Date().toISOString(),
       pdc:S.pdc, weekRPE:[...S.weekRPE], library:JSON.parse(JSON.stringify(S.library)),
       days:JSON.parse(JSON.stringify(S.days)), overrides:JSON.parse(JSON.stringify(S.overrides)),
-      log:JSON.parse(JSON.stringify(S.log)) };
+      log:JSON.parse(JSON.stringify(S.log)), notes:JSON.parse(JSON.stringify(S.notes)) };
     S.archive.push(snap); saveArchive();
-    S.log={}; store.del("sb:log"); S.week=0; S.blockName=newName; S.sheet=null; S.draft=null;
+    S.log={}; store.del("sb:log"); S.notes={}; store.del("sb:notes"); S.week=0; S.blockName=newName; S.sheet=null; S.draft=null;
     saveProgram(); render(); toast("Nouveau bloc démarré");
   }
 });
@@ -917,6 +955,8 @@ document.addEventListener("input",e=>{
   else if(t==="draft"){ const f=el.dataset.f; S.draft[f]= (f==="oneRM"||f==="sets"||f==="reps") ? parseFloat(el.value)||0 : el.value; }
   else if(t==="warmup"){ warmupState[el.dataset.f]=el.value; const out=document.getElementById("warmup-out"); if(out) out.innerHTML=warmupOutHtml(); }
   else if(t==="account"){ accountState[el.dataset.f]=el.value; }
+  else if(t==="daynote"){ const key=el.dataset.k; const n=S.notes[key]||(S.notes[key]={}); n.note=el.value; saveNotes(); }
+  else if(t==="note"){ const k=el.dataset.k; const e=S.log[k]||(S.log[k]={sets:[],open:true}); e.note=el.value; saveLog(); }
 });
 document.addEventListener("change",e=>{ const el=e.target;
   if(el.id==="importf"&&el.files[0]){ importData(el.files[0]); el.value=""; }
@@ -995,12 +1035,12 @@ function saveDraft(){
 
 /* export / import */
 function buildPayload(){
-  return {app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme,blockName:S.blockName,archive:S.archive,mode:S.mode};
+  return {app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme,blockName:S.blockName,archive:S.archive,mode:S.mode,notes:S.notes};
 }
 function applyPayload(d){
   if(d.pdc!=null) S.pdc=d.pdc; if(d.weekRPE) S.weekRPE=d.weekRPE; if(d.library) S.library=d.library; if(d.days) S.days=d.days; if(d.overrides) S.overrides=d.overrides; if(d.log) S.log=d.log; if(d.theme) S.theme=d.theme;
-  if(d.blockName) S.blockName=d.blockName; if(d.archive) S.archive=d.archive; if(d.mode) S.mode=d.mode;
-  normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveArchive(); saveTheme();
+  if(d.blockName) S.blockName=d.blockName; if(d.archive) S.archive=d.archive; if(d.mode) S.mode=d.mode; if(d.notes) S.notes=d.notes;
+  normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveArchive(); saveNotes(); saveTheme();
 }
 function exportData(){
   const blob=new Blob([JSON.stringify(buildPayload(),null,2)],{type:"application/json"});
@@ -1048,6 +1088,7 @@ function importData(file){
   normalizeLog();
   S.videos = store.get("sb:videos") || [];
   S.archive = store.get("sb:archive") || [];
+  S.notes = store.get("sb:notes") || {};
   render(); renderRest();
   const splashEl=document.getElementById("splash");
   if(splashEl) splashEl.innerHTML = splashHtml(S.mode) + `<div class="splash-word">${MODES[S.mode].word}</div>`;
