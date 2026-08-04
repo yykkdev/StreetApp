@@ -270,6 +270,37 @@ const MODES = {
   body:{word:"BODY", sub:"Programme de musculation"},
 };
 let introControllers=[];
+/* poses définies une seule fois : utilisées pour le rendu statique initial (pas de figure
+   invisible tant que l'animation n'a pas démarré) ET pour piloter l'animation elle-même */
+const MU_POSES=[
+  {t:0,    sh:[0,30],  hip:[0,62],  feet:[0,92]},   // suspension bras tendus
+  {t:420,  sh:[0,8],   hip:[0,40],  feet:[0,72]},   // traction, menton à la barre
+  {t:760,  sh:[10,-6], hip:[-4,26], feet:[-10,54]}, // transition (bascule au-dessus)
+  {t:1200, sh:[0,-30], hip:[0,-8],  feet:[0,22]},   // extension, appui bras tendus
+  {t:1550, sh:[0,-30], hip:[0,-8],  feet:[0,22]},   // tenue
+];
+const PU_POSES=[
+  {t:0,   sh:[0,30], hip:[0,62], feet:[0,92]}, // suspension
+  {t:520, sh:[0,4],  hip:[0,36], feet:[0,68]}, // menton à la barre
+  {t:1040,sh:[0,30], hip:[0,62], feet:[0,92]}, // retour suspension
+];
+const DIP_POSES=[
+  {t:0,   sh:[0,-32], hip:[0,-6],  feet:[0,22]},  // bras tendus, appui
+  {t:520, sh:[6,-8],  hip:[2,18],  feet:[-4,44]},// descente, coudes fléchis
+  {t:1040,sh:[0,-32], hip:[0,-6],  feet:[0,22]},  // retour appui
+];
+const SQ_POSES=[
+  {t:0,   sh:[0,-30], hip:[0,-4],  feet:[0,24]},  // debout, barre sur le dos
+  {t:600, sh:[4,4],   hip:[2,26],  feet:[-4,50]},  // accroupi
+  {t:1200,sh:[0,-30], hip:[0,-4],  feet:[0,24]},  // retour debout
+];
+const DL_POSES=[
+  {t:0,   sh:[-10,-30], hip:[5,-55], feet:[0,-8]},  // bas, barre au sol
+  {t:600, sh:[0,-45],   hip:[0,-85], feet:[0,-65]}, // haut, verrouillage
+  {t:1200,sh:[-10,-30], hip:[5,-55], feet:[0,-8]},  // retour bas
+];
+const BP_POSES=[{t:0,y:-6},{t:500,y:-34},{t:1000,y:-6}];
+const POSE_POSES=[{t:0,y:-10},{t:700,y:-28},{t:1400,y:-10}];
 
 /* ================= cloud (Supabase) ================= */
 const SUPA_URL="https://jkcifmiuyeszefrtfman.supabase.co";
@@ -1101,84 +1132,61 @@ function driveLinear(update, poses, opts){
   requestAnimationFrame(frame);
   return { stop(){ running=false; } };
 }
-function stickSvg(scaleTransform, barX, arm, torso, legs, head, headR){
+function stickSvg(scaleTransform, barX, arm, torso, legs, head, headR, poses, headFollows, headOffset){
+  const p0=poses[0], sh=p0.sh, hip=p0.hip, feet=p0.feet;
+  const hp=headFollows==="hip"?hip:sh, ho=headOffset!=null?headOffset:12;
   return `<svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="${scaleTransform}">
     <line class="mu-bar" x1="${-barX}" y1="0" x2="${barX}" y2="0"/>
-    <line class="mu-arm" id="${arm}" x1="0" y1="0" x2="0" y2="0"/>
-    <line class="mu-torso" id="${torso}" x1="0" y1="0" x2="0" y2="0"/>
-    <line class="mu-legs" id="${legs}" x1="0" y1="0" x2="0" y2="0"/>
-    <circle class="mu-head" id="${head}" cx="0" cy="0" r="${headR}"/>
+    <line class="mu-arm" id="${arm}" x1="0" y1="0" x2="${sh[0]}" y2="${sh[1]}"/>
+    <line class="mu-torso" id="${torso}" x1="${sh[0]}" y1="${sh[1]}" x2="${hip[0]}" y2="${hip[1]}"/>
+    <line class="mu-legs" id="${legs}" x1="${hip[0]}" y1="${hip[1]}" x2="${feet[0]}" y2="${feet[1]}"/>
+    <circle class="mu-head" id="${head}" cx="${hp[0]}" cy="${hp[1]-ho}" r="${headR}"/>
   </g></svg>`;
 }
 function splashHtml(mode){
   if(mode==="power"){
     return `<div class="mu-row">
-      ${stickSvg("translate(70,64) scale(1.6)",22,"sqArm","sqTorso","sqLegs","sqHead",4)}
+      ${stickSvg("translate(70,64) scale(1.6)",22,"sqArm","sqTorso","sqLegs","sqHead",4,SQ_POSES)}
       <svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="translate(70,85) scale(1.9)">
         <line class="mu-bar" x1="-28" y1="14" x2="12" y2="14"/>
         <line class="mu-legs" x1="-24" y1="0" x2="-34" y2="16"/>
         <line class="mu-legs" x1="-34" y1="16" x2="-22" y2="26"/>
         <line class="mu-torso" x1="-24" y1="0" x2="16" y2="0"/>
         <circle class="mu-head" cx="26" cy="0" r="7"/>
-        <line class="mu-arm" id="bpArm" x1="16" y1="0" x2="16" y2="0"/>
-        <line class="mu-bar" id="bpBar" x1="2" y1="0" x2="30" y2="0"/>
+        <line class="mu-arm" id="bpArm" x1="16" y1="0" x2="16" y2="${BP_POSES[0].y}"/>
+        <line class="mu-bar" id="bpBar" x1="2" y1="${BP_POSES[0].y}" x2="30" y2="${BP_POSES[0].y}"/>
       </g></svg>
-      ${stickSvg("translate(70,150) scale(1.6)",22,"dlArm","dlTorso","dlLegs","dlHead",4)}
+      ${stickSvg("translate(70,150) scale(1.6)",22,"dlArm","dlTorso","dlLegs","dlHead",4,DL_POSES,"hip",10)}
     </div>`;
   }
   if(mode==="body"){
-    return `<div class="mu-row"><svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="translate(70,72) scale(1.4)">
-      <line class="mu-torso" x1="0" y1="-30" x2="0" y2="20"/>
-      <circle class="mu-head" cx="0" cy="-40" r="7"/>
+    const y0=POSE_POSES[0].y;
+    return `<div class="mu-row"><svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="translate(70,74) scale(1.4)">
+      <line class="mu-torso" x1="0" y1="-28" x2="0" y2="20"/>
+      <circle class="mu-head" cx="0" cy="-38" r="7"/>
       <line class="mu-legs" x1="0" y1="20" x2="-6" y2="55"/>
       <line class="mu-legs" x1="0" y1="20" x2="6" y2="55"/>
-      <line class="mu-arm" x1="0" y1="-26" x2="14" y2="-4"/>
-      <line class="mu-arm" id="clFore" x1="14" y1="-4" x2="14" y2="0"/>
+      <line class="mu-arm" x1="0" y1="-24" x2="-16" y2="-18"/>
+      <line class="mu-arm" x1="0" y1="-24" x2="16" y2="-18"/>
+      <line class="mu-arm" id="pzL" x1="-16" y1="-18" x2="-14" y2="${y0}"/>
+      <line class="mu-arm" id="pzR" x1="16" y1="-18" x2="14" y2="${y0}"/>
     </g></svg></div>`;
   }
   return `<div class="mu-row">
-    ${stickSvg("translate(70,90) scale(1.8)",17,"dpArm","dpTorso","dpLegs","dpHead",4)}
-    ${stickSvg("translate(70,58)",46,"muArm","muTorso","muLegs","muHead",7)}
-    ${stickSvg("translate(70,58)",46,"puArm","puTorso","puLegs","puHead",7)}
+    ${stickSvg("translate(70,90) scale(1.8)",17,"dpArm","dpTorso","dpLegs","dpHead",4,DIP_POSES)}
+    ${stickSvg("translate(70,58)",46,"muArm","muTorso","muLegs","muHead",7,MU_POSES)}
+    ${stickSvg("translate(70,58)",46,"puArm","puTorso","puLegs","puHead",7,PU_POSES)}
   </div>`;
 }
 function runIntroAnim(){
   if(S.mode==="power") return runPowerAnim();
   if(S.mode==="body") return runBodyAnim();
-  const MU_POSES=[
-    {t:0,    sh:[0,30],  hip:[0,62],  feet:[0,92]},   // suspension bras tendus
-    {t:420,  sh:[0,8],   hip:[0,40],  feet:[0,72]},   // traction, menton à la barre
-    {t:760,  sh:[10,-6], hip:[-4,26], feet:[-10,54]}, // transition (bascule au-dessus)
-    {t:1200, sh:[0,-30], hip:[0,-8],  feet:[0,22]},   // extension, appui bras tendus
-    {t:1550, sh:[0,-30], hip:[0,-8],  feet:[0,22]},   // tenue
-  ];
-  const PU_POSES=[
-    {t:0,   sh:[0,30], hip:[0,62], feet:[0,92]}, // suspension
-    {t:520, sh:[0,4],  hip:[0,36], feet:[0,68]}, // menton à la barre
-    {t:1040,sh:[0,30], hip:[0,62], feet:[0,92]}, // retour suspension
-  ];
-  const DIP_POSES=[
-    {t:0,   sh:[0,-32], hip:[0,-6],  feet:[0,22]},  // bras tendus, appui
-    {t:520, sh:[6,-8],  hip:[2,18],  feet:[-4,44]},// descente, coudes fléchis
-    {t:1040,sh:[0,-32], hip:[0,-6],  feet:[0,22]},  // retour appui
-  ];
   introControllers.push(driveStick({arm:"dpArm",torso:"dpTorso",legs:"dpLegs",head:"dpHead"}, DIP_POSES, {loop:true}));
   introControllers.push(driveStick({arm:"puArm",torso:"puTorso",legs:"puLegs",head:"puHead"}, PU_POSES, {loop:true}));
   introControllers.push(driveStick({arm:"muArm",torso:"muTorso",legs:"muLegs",head:"muHead"}, MU_POSES, {loop:false}));
   setTimeout(hideSplash, MU_POSES[MU_POSES.length-1].t + 150);
 }
 function runPowerAnim(){
-  const SQ_POSES=[
-    {t:0,   sh:[0,-30], hip:[0,-4],  feet:[0,24]},  // debout, barre sur le dos
-    {t:600, sh:[4,4],   hip:[2,26],  feet:[-4,50]},  // accroupi
-    {t:1200,sh:[0,-30], hip:[0,-4],  feet:[0,24]},  // retour debout
-  ];
-  const DL_POSES=[
-    {t:0,   sh:[-10,-30], hip:[5,-55], feet:[0,-8]},  // bas, barre au sol
-    {t:600, sh:[0,-45],   hip:[0,-85], feet:[0,-65]}, // haut, verrouillage
-    {t:1200,sh:[-10,-30], hip:[5,-55], feet:[0,-8]},  // retour bas
-  ];
-  const BP_POSES=[{t:0,y:-6},{t:500,y:-34},{t:1000,y:-6}];
   introControllers.push(driveStick({arm:"sqArm",torso:"sqTorso",legs:"sqLegs",head:"sqHead"}, SQ_POSES, {loop:true}));
   introControllers.push(driveStick({arm:"dlArm",torso:"dlTorso",legs:"dlLegs",head:"dlHead"}, DL_POSES, {loop:true, headFollows:"hip", headOffset:10}));
   introControllers.push(driveLinear(y=>{
@@ -1189,8 +1197,11 @@ function runPowerAnim(){
   setTimeout(hideSplash, 1700);
 }
 function runBodyAnim(){
-  const CURL_POSES=[{t:0,y:10},{t:450,y:-22},{t:900,y:10}];
-  introControllers.push(driveLinear(y=>{ const f=document.getElementById("clFore"); if(f) f.setAttribute("y2",y); }, CURL_POSES, {loop:true}));
+  introControllers.push(driveLinear(y=>{
+    const l=document.getElementById("pzL"), r=document.getElementById("pzR");
+    if(l) l.setAttribute("y2",y);
+    if(r) r.setAttribute("y2",y);
+  }, POSE_POSES, {loop:true}));
   setTimeout(hideSplash, 1700);
 }
 </script>
