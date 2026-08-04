@@ -290,9 +290,9 @@ const DIP_POSES=[
   {t:1040,sh:[0,-32], hip:[0,-6],  feet:[0,22]},  // retour appui
 ];
 const SQ_POSES=[
-  {t:0,   sh:[0,-30], hip:[0,-4],  feet:[0,24]},  // debout, barre sur le dos
-  {t:600, sh:[4,4],   hip:[2,26],  feet:[-4,50]},  // accroupi
-  {t:1200,sh:[0,-30], hip:[0,-4],  feet:[0,24]},  // retour debout
+  {t:0,   sh:[0,4],  hip:[0,34],  feet:[0,66]},  // debout, barre collée sur le dos
+  {t:600, sh:[3,10], hip:[7,29],  feet:[-3,42]}, // accroupi, jambes pliées
+  {t:1200,sh:[0,4],  hip:[0,34],  feet:[0,66]},  // retour debout
 ];
 const DL_POSES=[
   {t:0,   sh:[-10,-30], hip:[5,-55], feet:[0,-8]},  // bas, barre au sol
@@ -1146,7 +1146,7 @@ function stickSvg(scaleTransform, barX, arm, torso, legs, head, headR, poses, he
 function splashHtml(mode){
   if(mode==="power"){
     return `<div class="mu-row">
-      ${stickSvg("translate(70,64) scale(1.6)",22,"sqArm","sqTorso","sqLegs","sqHead",4,SQ_POSES)}
+      ${stickSvg("translate(70,10) scale(2.0)",22,"sqArm","sqTorso","sqLegs","sqHead",4,SQ_POSES)}
       <svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="translate(70,85) scale(1.9)">
         <line class="mu-bar" x1="-28" y1="14" x2="12" y2="14"/>
         <line class="mu-legs" x1="-24" y1="0" x2="-34" y2="16"/>
