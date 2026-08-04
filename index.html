@@ -359,13 +359,14 @@ function pullFromCloud(){
 function genCode(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
 function loadCoachLinks(){
   if(!supa||!S.user) return;
-  supa.from("coach_links").select("*").or(`athlete_id.eq.${S.user.id},coach_id.eq.${S.user.id}`)
+  supa.from("coach_links").select("*").or(`athlete_id.eq.${S.user.id},coach_id.eq.${S.user.id}`).order("created_at",{ascending:false})
     .then(({data,error})=>{ if(!error&&data){ S.coachLinks=data; render(); } })
     .catch(()=>{});
 }
 function genCoachCode(){
   if(!supa||!S.user) return;
-  supa.from("coach_links").insert({athlete_id:S.user.id, code:genCode(), athlete_email:S.user.email})
+  supa.from("coach_links").delete().eq("athlete_id",S.user.id).is("coach_id",null)
+    .then(()=>supa.from("coach_links").insert({athlete_id:S.user.id, code:genCode(), athlete_email:S.user.email}))
     .then(({error})=>{ if(error) toast("Erreur : "+error.message); else loadCoachLinks(); })
     .catch(()=>toast("Erreur de connexion"));
 }
@@ -880,8 +881,12 @@ function renderSheet(){
       const linked=asAthlete.filter(l=>l.coach_id);
       inner+=`<div class="exform">`;
       inner+=`<h3>Partager mon suivi</h3>`;
-      inner+=`<button class="mini" data-a="gen-coach-code">Générer un code</button>`;
-      if(pending.length) inner+=`<div class="code-display">${esc(pending[pending.length-1].code)}</div>`;
+      if(pending.length){
+        inner+=`<div class="code-display">${esc(pending[0].code)}</div>`;
+        inner+=`<button class="mini" data-a="gen-coach-code">Réinitialiser le code</button>`;
+      } else {
+        inner+=`<button class="mini" data-a="gen-coach-code">Générer un code</button>`;
+      }
       if(linked.length){
         inner+=`<div class="backup-note">Coachs ayant accès à ton suivi :</div>`;
         linked.forEach(l=>inner+=`<div class="lib-item"><div class="l"><div class="nm">Coach</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><button class="icon-btn sm danger" data-a="revoke-coach-link" data-id="${l.id}">✕</button></div>`);
@@ -1004,7 +1009,7 @@ document.addEventListener("click",e=>{
   }
   else if(a==="account-logout"){
     if(supa) supa.auth.signOut();
-    S.sheet=null; render(); toast("Déconnecté");
+    S.user=null; S.coachLinks=[]; S.sheet=null; render(); toast("Déconnecté");
   }
   else if(a==="block-new"){
     if(!confirm("Clôturer le bloc actuel et en démarrer un nouveau ? Le bloc actuel restera consultable dans l'historique.")) return;
