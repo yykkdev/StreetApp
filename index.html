@@ -290,9 +290,9 @@ const DIP_POSES=[
   {t:1040,sh:[0,-32], hip:[0,-6],  feet:[0,22]},  // retour appui
 ];
 const SQ_POSES=[
-  {t:0,   hipY:30, footX:14, footY:60},  // debout, face à nous, barre sur les épaules
-  {t:600, hipY:17, footX:19, footY:44},  // accroupi, jambes écartées pliées
-  {t:1200,hipY:30, footX:14, footY:60},  // retour debout
+  {t:0,   bodyY:0,  footX:14},  // debout, face à nous, barre sur les épaules
+  {t:600, bodyY:14, footX:19},  // accroupi : tout le buste/la barre descendent, genoux dehors, pieds fixes au sol
+  {t:1200,bodyY:0,  footX:14},  // retour debout
 ];
 const DL_POSES=[
   {t:0,   sh:[-10,-30], hip:[5,-55], feet:[0,-8]},  // bas, barre au sol
@@ -1187,13 +1187,15 @@ function splashHtml(mode){
   if(mode==="power"){
     return `<div class="mu-row">
       <svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="translate(70,40) scale(1.7)">
-        <line class="mu-arm" x1="0" y1="0" x2="-18" y2="2"/>
-        <line class="mu-arm" x1="0" y1="0" x2="18" y2="2"/>
-        <line class="mu-bar" x1="-20" y1="0" x2="20" y2="0"/>
-        <circle class="mu-head" cx="0" cy="-11" r="4"/>
-        <line class="mu-torso" id="sqTorso" x1="0" y1="0" x2="0" y2="${SQ_POSES[0].hipY}"/>
-        <line class="mu-legs" id="sqLegL" x1="0" y1="${SQ_POSES[0].hipY}" x2="${-SQ_POSES[0].footX}" y2="${SQ_POSES[0].footY}"/>
-        <line class="mu-legs" id="sqLegR" x1="0" y1="${SQ_POSES[0].hipY}" x2="${SQ_POSES[0].footX}" y2="${SQ_POSES[0].footY}"/>
+        <g id="sqUpper" transform="translate(0,${SQ_POSES[0].bodyY})">
+          <line class="mu-arm" x1="0" y1="0" x2="-18" y2="2"/>
+          <line class="mu-arm" x1="0" y1="0" x2="18" y2="2"/>
+          <line class="mu-bar" x1="-20" y1="0" x2="20" y2="0"/>
+          <circle class="mu-head" cx="0" cy="-11" r="4"/>
+          <line class="mu-torso" x1="0" y1="0" x2="0" y2="30"/>
+        </g>
+        <line class="mu-legs" id="sqLegL" x1="0" y1="${SQ_POSES[0].bodyY+30}" x2="${-SQ_POSES[0].footX}" y2="60"/>
+        <line class="mu-legs" id="sqLegR" x1="0" y1="${SQ_POSES[0].bodyY+30}" x2="${SQ_POSES[0].footX}" y2="60"/>
       </g></svg>
       <svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="translate(70,85) scale(1.9)">
         <line class="mu-bar" x1="-28" y1="14" x2="12" y2="14"/>
@@ -1236,11 +1238,12 @@ function runIntroAnim(){
 }
 function runPowerAnim(){
   introControllers.push(drivePose(v=>{
-    const torso=document.getElementById("sqTorso"), legL=document.getElementById("sqLegL"), legR=document.getElementById("sqLegR");
-    if(torso) torso.setAttribute("y2",v.hipY);
-    if(legL){ legL.setAttribute("y1",v.hipY); legL.setAttribute("x2",-v.footX); legL.setAttribute("y2",v.footY); }
-    if(legR){ legR.setAttribute("y1",v.hipY); legR.setAttribute("x2",v.footX); legR.setAttribute("y2",v.footY); }
-  }, SQ_POSES, ["hipY","footX","footY"], {loop:true}));
+    const upper=document.getElementById("sqUpper"), legL=document.getElementById("sqLegL"), legR=document.getElementById("sqLegR");
+    const hipY=v.bodyY+30;
+    if(upper) upper.setAttribute("transform",`translate(0,${v.bodyY})`);
+    if(legL){ legL.setAttribute("y1",hipY); legL.setAttribute("x2",-v.footX); }
+    if(legR){ legR.setAttribute("y1",hipY); legR.setAttribute("x2",v.footX); }
+  }, SQ_POSES, ["bodyY","footX"], {loop:true}));
   introControllers.push(driveStick({arm:"dlArm",torso:"dlTorso",legs:"dlLegs",head:"dlHead"}, DL_POSES, {loop:true, headFollows:"hip", headOffset:10, bar:{id:"dlBar", follows:"feet", width:22}}));
   introControllers.push(driveLinear(y=>{
     const arm=document.getElementById("bpArm"), bar=document.getElementById("bpBar");
