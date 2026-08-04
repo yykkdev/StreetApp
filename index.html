@@ -1029,7 +1029,7 @@ document.addEventListener("click",e=>{
       S.user={id:data.session.user.id, email:data.session.user.email};
       accountState={mode:"signin",email:"",password:"",notice:null};
       if(S.landing){ S.landing=false; saveProgram(); }
-      if(pendingClaimCode){ S.sheet={type:"coaching"}; loadCoachLinks(); }
+      if(pendingClaimCode){ const cc=pendingClaimCode; S.sheet={type:"coaching"}; loadCoachLinks(); claimCoachCode(cc); }
       render(); toast("Connecté"); pullFromCloud();
     }).catch(()=>toast("Connexion impossible"));
   }
@@ -1220,7 +1220,7 @@ function importData(file){
     supa.auth.onAuthStateChange((event,session)=>{
       S.user = session ? {id:session.user.id, email:session.user.email} : null;
       if(S.user) pullFromCloud();
-      if(S.user && pendingClaimCode){ S.landing=false; S.sheet={type:"coaching"}; loadCoachLinks(); }
+      if(S.user && pendingClaimCode){ const cc=pendingClaimCode; S.landing=false; S.sheet={type:"coaching"}; loadCoachLinks(); claimCoachCode(cc); }
       render();
     });
   }
