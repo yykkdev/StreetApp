@@ -178,7 +178,7 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .sheet-h .t{font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:20px;}
 .sheet h3{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:18px 0 10px;}
 .sheet h3:first-child{margin-top:0;}
-.code-display{font-family:'Space Mono',monospace; font-weight:700; font-size:28px; letter-spacing:.15em; text-align:center; color:var(--accent); padding:14px; background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:11px; margin-top:10px;}
+.code-display{font-family:'Space Mono',monospace; font-weight:700; font-size:28px; letter-spacing:.15em; text-align:center; color:var(--accent); padding:14px; background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:11px; margin-top:10px; cursor:pointer; user-select:all;}
 .lib-item{display:flex; align-items:center; gap:10px; padding:13px 12px; background:var(--card); border:1px solid var(--line); border-radius:11px; margin-bottom:8px; cursor:pointer;}
 .lib-item .l{flex:1; min-width:0;}
 .lib-item .nm{font-size:14px; font-weight:500; color:var(--ink);}
@@ -882,7 +882,8 @@ function renderSheet(){
       inner+=`<div class="exform">`;
       inner+=`<h3>Partager mon suivi</h3>`;
       if(pending.length){
-        inner+=`<div class="code-display">${esc(pending[0].code)}</div>`;
+        inner+=`<div class="code-display" data-a="copy-coach-code" data-code="${esc(pending[0].code)}">${esc(pending[0].code)}</div>`;
+        inner+=`<div class="backup-note">Touche le code pour le copier.</div>`;
         inner+=`<button class="mini" data-a="gen-coach-code">Réinitialiser le code</button>`;
       } else {
         inner+=`<button class="mini" data-a="gen-coach-code">Générer un code</button>`;
@@ -965,6 +966,11 @@ document.addEventListener("click",e=>{
   else if(a==="open-mode"){ S.drawer=false; S.sheet={type:"mode"}; render(); }
   else if(a==="open-coaching"){ S.drawer=false; S.sheet={type:"coaching"}; render(); if(S.user) loadCoachLinks(); }
   else if(a==="gen-coach-code"){ genCoachCode(); }
+  else if(a==="copy-coach-code"){
+    const code=el.dataset.code||"";
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(()=>toast("Code copié")).catch(()=>toast("Copie impossible")); }
+    else toast("Copie impossible sur cet appareil");
+  }
   else if(a==="claim-coach-code"){
     const inp=document.getElementById("coachCodeInput");
     if(!inp||!inp.value.trim()){ toast("Entre un code"); return; }
