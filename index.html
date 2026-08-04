@@ -176,6 +176,9 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .sheet{width:100%; max-width:540px; max-height:86vh; overflow-y:auto; background:var(--bg); border-top-left-radius:20px; border-top-right-radius:20px; border-top:1px solid var(--line); padding:8px 16px calc(24px + env(safe-area-inset-bottom));}
 .sheet-h{position:sticky; top:0; background:var(--bg); display:flex; align-items:center; justify-content:space-between; padding:12px 2px 12px; z-index:1;}
 .sheet-h .t{font-family:'Bricolage Grotesque',sans-serif; font-weight:700; font-size:20px;}
+.sheet h3{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:18px 0 10px;}
+.sheet h3:first-child{margin-top:0;}
+.code-display{font-family:'Space Mono',monospace; font-weight:700; font-size:28px; letter-spacing:.15em; text-align:center; color:var(--accent); padding:14px; background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:11px; margin-top:10px;}
 .lib-item{display:flex; align-items:center; gap:10px; padding:13px 12px; background:var(--card); border:1px solid var(--line); border-radius:11px; margin-bottom:8px; cursor:pointer;}
 .lib-item .l{flex:1; min-width:0;}
 .lib-item .nm{font-size:14px; font-weight:500; color:var(--ink);}
@@ -264,7 +267,7 @@ const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"
 /* ================= état + stockage ================= */
 let S = { week:0, edit:false, scope:"model", panel:false, drawer:false, sheet:null, draft:null,
   theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[],
-  blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice", mode:"street", notes:{} };
+  blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice", mode:"street", notes:{}, coachLinks:[] };
 let pendingVidEx=null, galleryUrls=[];
 const MODES = {
   street:{word:"STREET", sub:"Programme de street-lifting"},
@@ -351,6 +354,45 @@ function pullFromCloud(){
       else { pushToCloud(); }
     })
     .catch(()=>{});
+}
+/* ---- coaching (liaison par code, lecture seule V1) ---- */
+function genCode(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
+function loadCoachLinks(){
+  if(!supa||!S.user) return;
+  supa.from("coach_links").select("*").or(`athlete_id.eq.${S.user.id},coach_id.eq.${S.user.id}`)
+    .then(({data,error})=>{ if(!error&&data){ S.coachLinks=data; render(); } })
+    .catch(()=>{});
+}
+function genCoachCode(){
+  if(!supa||!S.user) return;
+  supa.from("coach_links").insert({athlete_id:S.user.id, code:genCode(), athlete_email:S.user.email})
+    .then(({error})=>{ if(error) toast("Erreur : "+error.message); else loadCoachLinks(); })
+    .catch(()=>toast("Erreur de connexion"));
+}
+function claimCoachCode(code){
+  if(!supa||!S.user) return;
+  supa.from("coach_links").update({coach_id:S.user.id}).eq("code",code.trim().toUpperCase()).is("coach_id",null).select()
+    .then(({data,error})=>{
+      if(error){ toast("Erreur : "+error.message); return; }
+      if(!data||!data.length){ toast("Code invalide ou déjà utilisé"); return; }
+      toast("Athlète lié"); loadCoachLinks();
+    })
+    .catch(()=>toast("Erreur de connexion"));
+}
+function revokeCoachLink(id){
+  if(!supa||!S.user) return;
+  supa.from("coach_links").delete().eq("id",id).eq("athlete_id",S.user.id)
+    .then(({error})=>{ if(error) toast("Erreur : "+error.message); else { toast("Accès révoqué"); loadCoachLinks(); } })
+    .catch(()=>toast("Erreur de connexion"));
+}
+function loadAthleteData(athleteId, athleteEmail){
+  if(!supa||!S.user) return;
+  supa.from("user_data").select("data").eq("id",athleteId).maybeSingle()
+    .then(({data,error})=>{
+      if(error||!data){ toast("Impossible de charger cet athlète"); return; }
+      S.sheet={type:"athlete-view", athleteEmail, data:data.data}; render();
+    })
+    .catch(()=>toast("Erreur de connexion"));
 }
 function checkPR(ex, entry, k){
   if(!ex || ex.mode!=="calc") return;
@@ -560,6 +602,7 @@ function renderDrawer(){
   h+=`<button class="drawer-item" data-a="open-history">📜 Historique des blocs</button>`;
   h+=`<button class="drawer-item" data-a="open-warmup">🔥 Échauffement</button>`;
   h+=`<button class="drawer-item" data-a="open-account">☁️ ${S.user?"Compte connecté":"Compte"}</button>`;
+  h+=`<button class="drawer-item" data-a="open-coaching">👥 Coaching</button>`;
   h+=`<button class="drawer-item" data-a="open-mode">🎯 Discipline</button>`;
   h+=`<div class="drawer-sep"></div>`;
   h+=`<button class="drawer-item" data-a="block-new">＋ Nouveau bloc</button>`;
@@ -681,6 +724,36 @@ function renderItem(day,di,it,ii,w){
   return h;
 }
 
+function renderReadOnlyDays(days, library, log, notes){
+  let out="";
+  (days||[]).forEach(day=>{
+    out+=`<div class="hist-day">${esc(day.name)}</div>`;
+    for(let w=0;w<4;w++){
+      const dn=notes && notes[w+"|"+day.id];
+      if(!dn||!(dn.fatigue||dn.sommeil||dn.stress||dn.douleur||dn.note)) continue;
+      const bits=FEELING_METRICS.filter(([f])=>dn[f]).map(([f,label])=>`${label} ${dn[f]}/5`);
+      if(dn.note) bits.push(`« ${esc(dn.note)} »`);
+      out+=`<div class="rep">S${w+1} · ${bits.join(" · ")}</div>`;
+    }
+    (day.items||[]).forEach(it=>{
+      const ex=library[it.exId]; if(!ex) return;
+      out+=`<div class="hist-ex"><div class="ex-name">${esc(ex.name)}</div>`;
+      let any=false;
+      for(let w=0;w<4;w++){
+        const entry=log && log[w+"|"+it.iid];
+        if(!entry||!Array.isArray(entry.sets)) continue;
+        const parts=entry.sets.filter(s=>s.charge||s.reps||s.rpe).map(s=>`${s.charge??"—"}kg×${s.reps??"—"}@${s.rpe??"—"}`);
+        if(!parts.length && !entry.note) continue;
+        any=true;
+        out+=`<div class="rep">S${w+1} : ${parts.join(" · ")||"—"}${entry.note?` · « ${esc(entry.note)} »`:""}</div>`;
+      }
+      if(!any) out+=`<div class="rep">Pas de séries notées</div>`;
+      out+=`</div>`;
+    });
+  });
+  return out;
+}
+
 /* ---- sheets ---- */
 function renderSheet(){
   const sh=S.sheet;
@@ -750,32 +823,13 @@ function renderSheet(){
       inner=`<div class="sheet-h"><div class="t">Bloc introuvable</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
     } else {
       inner=`<div class="sheet-h"><div class="t">${esc(blk.name)}</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
-      (blk.days||[]).forEach(day=>{
-        inner+=`<div class="hist-day">${esc(day.name)}</div>`;
-        for(let w=0;w<4;w++){
-          const dn=blk.notes && blk.notes[w+"|"+day.id];
-          if(!dn||!(dn.fatigue||dn.sommeil||dn.stress||dn.douleur||dn.note)) continue;
-          const bits=FEELING_METRICS.filter(([f])=>dn[f]).map(([f,label])=>`${label} ${dn[f]}/5`);
-          if(dn.note) bits.push(`« ${esc(dn.note)} »`);
-          inner+=`<div class="rep">S${w+1} · ${bits.join(" · ")}</div>`;
-        }
-        day.items.forEach(it=>{
-          const ex=blk.library[it.exId]; if(!ex) return;
-          inner+=`<div class="hist-ex"><div class="ex-name">${esc(ex.name)}</div>`;
-          let any=false;
-          for(let w=0;w<4;w++){
-            const entry=blk.log && blk.log[w+"|"+it.iid];
-            if(!entry||!Array.isArray(entry.sets)) continue;
-            const parts=entry.sets.filter(s=>s.charge||s.reps||s.rpe).map(s=>`${s.charge??"—"}kg×${s.reps??"—"}@${s.rpe??"—"}`);
-            if(!parts.length && !entry.note) continue;
-            any=true;
-            inner+=`<div class="rep">S${w+1} : ${parts.join(" · ")||"—"}${entry.note?` · « ${esc(entry.note)} »`:""}</div>`;
-          }
-          if(!any) inner+=`<div class="rep">Pas de séries notées</div>`;
-          inner+=`</div>`;
-        });
-      });
+      inner+=renderReadOnlyDays(blk.days, blk.library, blk.log, blk.notes);
     }
+  } else if(sh.type==="athlete-view"){
+    const d=sh.data||{};
+    inner=`<div class="sheet-h"><div class="t">${esc(sh.athleteEmail)}</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    inner+=`<div class="backup-note">${esc(d.blockName||"Bloc en cours")} · lecture seule</div>`;
+    inner+=renderReadOnlyDays(d.days, d.library||{}, d.log||{}, d.notes||{});
   } else if(sh.type==="blockname"){
     inner=`<div class="sheet-h"><div class="t">Nouveau bloc</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
     inner+=`<div class="exform"><div class="fr"><label>Nom du nouveau bloc</label><input type="text" data-in="draft" data-f="name" value="${esc(S.draft?S.draft.name:"")}"></div>`;
@@ -815,6 +869,32 @@ function renderSheet(){
     });
     inner+=`<div class="fr"><label>Note libre</label><input type="text" data-in="daynote" data-k="${key}" value="${esc(dn.note||"")}" placeholder="Comment s'est passée la séance ?"></div>`;
     inner+=`</div>`;
+  } else if(sh.type==="coaching"){
+    inner=`<div class="sheet-h"><div class="t">Coaching</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    if(!S.user){
+      inner+=`<div class="clip-empty">Connecte-toi (☁️ Compte) pour utiliser le coaching.</div>`;
+    } else {
+      const asAthlete=S.coachLinks.filter(l=>l.athlete_id===S.user.id);
+      const asCoach=S.coachLinks.filter(l=>l.coach_id===S.user.id);
+      const pending=asAthlete.filter(l=>!l.coach_id);
+      const linked=asAthlete.filter(l=>l.coach_id);
+      inner+=`<div class="exform">`;
+      inner+=`<h3>Partager mon suivi</h3>`;
+      inner+=`<button class="mini" data-a="gen-coach-code">Générer un code</button>`;
+      if(pending.length) inner+=`<div class="code-display">${esc(pending[pending.length-1].code)}</div>`;
+      if(linked.length){
+        inner+=`<div class="backup-note">Coachs ayant accès à ton suivi :</div>`;
+        linked.forEach(l=>inner+=`<div class="lib-item"><div class="l"><div class="nm">Coach</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><button class="icon-btn sm danger" data-a="revoke-coach-link" data-id="${l.id}">✕</button></div>`);
+      }
+      inner+=`<h3>Devenir coach</h3>`;
+      inner+=`<div class="fr"><label>Code reçu de ton athlète</label><input type="text" id="coachCodeInput" placeholder="ABC123"></div>`;
+      inner+=`<button class="mini" data-a="claim-coach-code">Entrer le code</button>`;
+      if(asCoach.length){
+        inner+=`<h3>Mes athlètes</h3>`;
+        asCoach.forEach(l=>inner+=`<div class="lib-item" data-a="open-athlete-view" data-id="${l.athlete_id}" data-email="${esc(l.athlete_email)}"><div class="l"><div class="nm">${esc(l.athlete_email)}</div></div><span class="rep">›</span></div>`);
+      }
+      inner+=`</div>`;
+    }
   }
   return `<div class="sheet-backdrop" data-a="backdrop"><div class="sheet">${inner}</div></div>`;
 }
@@ -878,6 +958,15 @@ document.addEventListener("click",e=>{
   else if(a==="warmup-bw"){ warmupState.bw=el.dataset.v==="1"; render(); }
   else if(a==="open-account"){ S.drawer=false; S.sheet={type:"account"}; render(); }
   else if(a==="open-mode"){ S.drawer=false; S.sheet={type:"mode"}; render(); }
+  else if(a==="open-coaching"){ S.drawer=false; S.sheet={type:"coaching"}; render(); if(S.user) loadCoachLinks(); }
+  else if(a==="gen-coach-code"){ genCoachCode(); }
+  else if(a==="claim-coach-code"){
+    const inp=document.getElementById("coachCodeInput");
+    if(!inp||!inp.value.trim()){ toast("Entre un code"); return; }
+    claimCoachCode(inp.value);
+  }
+  else if(a==="revoke-coach-link"){ if(confirm("Révoquer l'accès de ce coach ?")) revokeCoachLink(el.dataset.id); }
+  else if(a==="open-athlete-view"){ loadAthleteData(el.dataset.id, el.dataset.email); }
   else if(a==="set-mode"){ S.mode=el.dataset.v; if(!S.landing) saveProgram(); render(); }
   else if(a==="open-daynote"){
     const w=+el.dataset.w, dayId=el.dataset.day;
