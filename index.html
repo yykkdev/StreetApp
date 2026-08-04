@@ -356,7 +356,12 @@ function pullFromCloud(){
     .catch(()=>{});
 }
 /* ---- coaching (liaison par code, lecture seule V1) ---- */
-function genCode(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
+function genCode(){
+  const chars="23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  let s="";
+  for(let i=0;i<6;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
 function loadCoachLinks(){
   if(!supa||!S.user) return;
   supa.from("coach_links").select("*").or(`athlete_id.eq.${S.user.id},coach_id.eq.${S.user.id}`).order("created_at",{ascending:false})
