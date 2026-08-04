@@ -238,38 +238,7 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 <div id="toast" class="toast"></div>
 <div id="rest"></div>
 <input id="vidfile" type="file" accept="video/*" hidden>
-<div id="splash">
-  <div class="mu-row">
-    <svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true">
-      <g transform="translate(70,90) scale(1.8)">
-        <line class="mu-bar" x1="-17" y1="0" x2="17" y2="0"/>
-        <line class="mu-arm" id="dpArm" x1="0" y1="0" x2="0" y2="-32"/>
-        <line class="mu-torso" id="dpTorso" x1="0" y1="-32" x2="0" y2="-6"/>
-        <line class="mu-legs" id="dpLegs" x1="0" y1="-6" x2="0" y2="22"/>
-        <circle class="mu-head" id="dpHead" cx="0" cy="-44" r="4"/>
-      </g>
-    </svg>
-    <svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true">
-      <g transform="translate(70,58)">
-        <line class="mu-bar" x1="-46" y1="0" x2="46" y2="0"/>
-        <line class="mu-arm" id="muArm" x1="0" y1="0" x2="0" y2="30"/>
-        <line class="mu-torso" id="muTorso" x1="0" y1="30" x2="0" y2="62"/>
-        <line class="mu-legs" id="muLegs" x1="0" y1="62" x2="0" y2="92"/>
-        <circle class="mu-head" id="muHead" cx="0" cy="18" r="7"/>
-      </g>
-    </svg>
-    <svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true">
-      <g transform="translate(70,58)">
-        <line class="mu-bar" x1="-46" y1="0" x2="46" y2="0"/>
-        <line class="mu-arm" id="puArm" x1="0" y1="0" x2="0" y2="30"/>
-        <line class="mu-torso" id="puTorso" x1="0" y1="30" x2="0" y2="62"/>
-        <line class="mu-legs" id="puLegs" x1="0" y1="62" x2="0" y2="92"/>
-        <circle class="mu-head" id="puHead" cx="0" cy="18" r="7"/>
-      </g>
-    </svg>
-  </div>
-  <div class="splash-word">STREET</div>
-</div>
+<div id="splash"></div>
 
 <script>
 /* ================= grille RPE ================= */
@@ -293,8 +262,13 @@ const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"
 /* ================= état + stockage ================= */
 let S = { week:0, edit:false, scope:"model", panel:false, drawer:false, sheet:null, draft:null,
   theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[],
-  blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice" };
+  blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice", mode:"street" };
 let pendingVidEx=null, galleryUrls=[];
+const MODES = {
+  street:{word:"STREET", sub:"Programme de street-lifting"},
+  power:{word:"POWER", sub:"Programme de force / powerlifting"},
+  body:{word:"BODY", sub:"Programme de musculation"},
+};
 let introControllers=[];
 
 /* ================= cloud (Supabase) ================= */
@@ -312,7 +286,7 @@ const store={
   del(k){ delete mem[k]; try{ const L=this.ls(); if(L) L.removeItem(k); }catch(e){} },
 };
 let saveT=null;
-function saveProgram(){ store.set("sb:program",{pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,blockName:S.blockName}); scheduleCloudSync(); }
+function saveProgram(){ store.set("sb:program",{pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,blockName:S.blockName,mode:S.mode}); scheduleCloudSync(); }
 function saveLog(exId, entry, k){ clearTimeout(saveT); saveT=setTimeout(()=>{ store.set("sb:log",S.log); if(exId&&entry) checkPR(exId,entry,k); scheduleCloudSync(); },300); }
 function saveTheme(){ store.set("sb:theme",S.theme); scheduleCloudSync(); }
 function saveArchive(){ store.set("sb:archive",S.archive); scheduleCloudSync(); }
@@ -551,6 +525,7 @@ function renderDrawer(){
   h+=`<button class="drawer-item" data-a="open-history">📜 Historique des blocs</button>`;
   h+=`<button class="drawer-item" data-a="open-warmup">🔥 Échauffement</button>`;
   h+=`<button class="drawer-item" data-a="open-account">☁️ ${S.user?"Compte connecté":"Compte"}</button>`;
+  h+=`<button class="drawer-item" data-a="open-mode">🎯 Discipline</button>`;
   h+=`<div class="drawer-sep"></div>`;
   h+=`<button class="drawer-item" data-a="block-new">＋ Nouveau bloc</button>`;
   h+=`<button class="drawer-item" data-a="reset-all">🔄 Réinitialiser l'appareil</button>`;
@@ -570,13 +545,17 @@ function renderAuthForm(){
   h+=`<div class="backup-note">Tes données restent utilisables hors-ligne sans compte. Se connecter active juste la sauvegarde cloud.</div>`;
   return h;
 }
+function renderModeSelector(){
+  return `<div class="seg">${Object.keys(MODES).map(m=>`<button data-a="set-mode" data-v="${m}" class="${S.mode===m?"on":""}">${MODES[m].word[0]}${MODES[m].word.slice(1).toLowerCase()}</button>`).join("")}</div>`;
+}
 function renderLandingHtml(){
-  let h=`<div class="landing"><header class="hero"><h1>STREET</h1><div class="sub">Programme de street-lifting</div></header>`;
+  let h=`<div class="landing"><header class="hero"><h1>${MODES[S.mode].word}</h1><div class="sub">${MODES[S.mode].sub}</div></header>`;
   if(S.landingView==="login"){
     h+=`<div class="landing-form"><div class="exform">${renderAuthForm()}</div>`;
     h+=`<div class="sheet-actions"><button class="btn-ghost" data-a="landing-back">← Retour</button><button class="btn-primary" data-a="account-submit">${accountState.mode==="signup"?"Créer le compte":"Se connecter"}</button></div></div>`;
   } else {
-    h+=`<div class="landing-actions"><button class="btn-primary" data-a="landing-login">Se connecter</button><button class="btn-ghost" data-a="landing-local">Créer un programme local</button></div>`;
+    h+=`<div class="landing-actions"><div class="exform"><div class="fr"><label>Discipline</label>${renderModeSelector()}</div></div>`;
+    h+=`<button class="btn-primary" data-a="landing-login">Se connecter</button><button class="btn-ghost" data-a="landing-local">Créer un programme local</button></div>`;
   }
   return h+`</div>`;
 }
@@ -774,6 +753,10 @@ function renderSheet(){
       inner+=`<div class="exform">${renderAuthForm()}`;
       inner+=`<div class="sheet-actions"><button class="btn-ghost" data-a="sheet-close">Annuler</button><button class="btn-primary" data-a="account-submit">${accountState.mode==="signup"?"Créer le compte":"Se connecter"}</button></div></div>`;
     }
+  } else if(sh.type==="mode"){
+    inner=`<div class="sheet-h"><div class="t">Discipline</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    inner+=`<div class="exform"><div class="fr"><label>Discipline</label>${renderModeSelector()}</div>`;
+    inner+=`<div class="backup-note">Change l'habillage (nom, écran de démarrage). Ton programme reste identique.</div></div>`;
   }
   return `<div class="sheet-backdrop" data-a="backdrop"><div class="sheet">${inner}</div></div>`;
 }
@@ -836,6 +819,8 @@ document.addEventListener("click",e=>{
   else if(a==="warmup-from"){ warmupState={weight:el.dataset.w, bw:el.dataset.bw==="1"}; S.sheet={type:"warmup"}; render(); }
   else if(a==="warmup-bw"){ warmupState.bw=el.dataset.v==="1"; render(); }
   else if(a==="open-account"){ S.drawer=false; S.sheet={type:"account"}; render(); }
+  else if(a==="open-mode"){ S.drawer=false; S.sheet={type:"mode"}; render(); }
+  else if(a==="set-mode"){ S.mode=el.dataset.v; if(!S.landing) saveProgram(); render(); }
   else if(a==="account-mode"){ accountState.mode=el.dataset.v; accountState.notice=null; render(); }
   else if(a==="landing-login"){ S.landingView="login"; render(); }
   else if(a==="landing-back"){ S.landingView="choice"; render(); }
@@ -979,11 +964,11 @@ function saveDraft(){
 
 /* export / import */
 function buildPayload(){
-  return {app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme,blockName:S.blockName,archive:S.archive};
+  return {app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme,blockName:S.blockName,archive:S.archive,mode:S.mode};
 }
 function applyPayload(d){
   if(d.pdc!=null) S.pdc=d.pdc; if(d.weekRPE) S.weekRPE=d.weekRPE; if(d.library) S.library=d.library; if(d.days) S.days=d.days; if(d.overrides) S.overrides=d.overrides; if(d.log) S.log=d.log; if(d.theme) S.theme=d.theme;
-  if(d.blockName) S.blockName=d.blockName; if(d.archive) S.archive=d.archive;
+  if(d.blockName) S.blockName=d.blockName; if(d.archive) S.archive=d.archive; if(d.mode) S.mode=d.mode;
   normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveArchive(); saveTheme();
 }
 function exportData(){
@@ -1026,12 +1011,15 @@ function importData(file){
   } else {
     S.pdc=prog.pdc; S.weekRPE=prog.weekRPE||[6,6.5,7,7.5]; S.library=prog.library; S.days=prog.days; S.overrides=prog.overrides||{};
     S.blockName=prog.blockName||"Bloc 1 — Accumulation";
+    S.mode=prog.mode||"street";
     S.log=store.get("sb:log")||{};
   }
   normalizeLog();
   S.videos = store.get("sb:videos") || [];
   S.archive = store.get("sb:archive") || [];
   render(); renderRest();
+  const splashEl=document.getElementById("splash");
+  if(splashEl) splashEl.innerHTML = splashHtml(S.mode) + `<div class="splash-word">${MODES[S.mode].word}</div>`;
   try{ runIntroAnim(); }catch(e){}
   setTimeout(hideSplash,2200);
   if(supa){
@@ -1056,7 +1044,7 @@ function driveStick(ids, poses, opts){
   const arm=document.getElementById(ids.arm), torso=document.getElementById(ids.torso),
         legs=document.getElementById(ids.legs), head=document.getElementById(ids.head);
   if(!arm||!torso||!legs||!head) return null;
-  const loop=!!opts.loop, headOffset=opts.headOffset!=null?opts.headOffset:12;
+  const loop=!!opts.loop, headOffset=opts.headOffset!=null?opts.headOffset:12, headFollows=opts.headFollows==="hip"?"hip":"sh";
   const total=poses[poses.length-1].t;
   const ease=t=>t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
   const lerp=(a,b,r)=>a+(b-a)*r;
@@ -1073,7 +1061,8 @@ function driveStick(ids, poses, opts){
     torso.setAttribute("x2",hip[0]); torso.setAttribute("y2",hip[1]);
     legs.setAttribute("x1",hip[0]); legs.setAttribute("y1",hip[1]);
     legs.setAttribute("x2",feet[0]); legs.setAttribute("y2",feet[1]);
-    head.setAttribute("cx",sh[0]); head.setAttribute("cy",sh[1]-headOffset);
+    const hp=headFollows==="hip"?hip:sh;
+    head.setAttribute("cx",hp[0]); head.setAttribute("cy",hp[1]-headOffset);
   }
   let running=true;
   const start=performance.now();
@@ -1087,7 +1076,75 @@ function driveStick(ids, poses, opts){
   requestAnimationFrame(frame);
   return { stop(){ running=false; } };
 }
+function driveLinear(update, poses, opts){
+  opts=opts||{};
+  const loop=!!opts.loop;
+  const total=poses[poses.length-1].t;
+  const ease=t=>t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+  const lerp=(a,b,r)=>a+(b-a)*r;
+  function apply(el){
+    let i=0; while(i<poses.length-2 && el>poses[i+1].t) i++;
+    const A=poses[i], B=poses[i+1];
+    const span=Math.max(1,B.t-A.t);
+    const r=ease(Math.min(1,Math.max(0,(el-A.t)/span)));
+    update(lerp(A.y,B.y,r));
+  }
+  let running=true;
+  const start=performance.now();
+  function frame(now){
+    if(!running) return;
+    let el=now-start;
+    el = loop ? (el % total) : Math.min(el,total);
+    apply(el);
+    if(loop || (now-start)<total) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return { stop(){ running=false; } };
+}
+function stickSvg(scaleTransform, barX, arm, torso, legs, head, headR){
+  return `<svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="${scaleTransform}">
+    <line class="mu-bar" x1="${-barX}" y1="0" x2="${barX}" y2="0"/>
+    <line class="mu-arm" id="${arm}" x1="0" y1="0" x2="0" y2="0"/>
+    <line class="mu-torso" id="${torso}" x1="0" y1="0" x2="0" y2="0"/>
+    <line class="mu-legs" id="${legs}" x1="0" y1="0" x2="0" y2="0"/>
+    <circle class="mu-head" id="${head}" cx="0" cy="0" r="${headR}"/>
+  </g></svg>`;
+}
+function splashHtml(mode){
+  if(mode==="power"){
+    return `<div class="mu-row">
+      ${stickSvg("translate(70,64) scale(1.6)",22,"sqArm","sqTorso","sqLegs","sqHead",4)}
+      <svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="translate(70,85) scale(1.9)">
+        <line class="mu-bar" x1="-28" y1="14" x2="12" y2="14"/>
+        <line class="mu-legs" x1="-24" y1="0" x2="-34" y2="16"/>
+        <line class="mu-legs" x1="-34" y1="16" x2="-22" y2="26"/>
+        <line class="mu-torso" x1="-24" y1="0" x2="16" y2="0"/>
+        <circle class="mu-head" cx="26" cy="0" r="7"/>
+        <line class="mu-arm" id="bpArm" x1="16" y1="0" x2="16" y2="0"/>
+        <line class="mu-bar" id="bpBar" x1="2" y1="0" x2="30" y2="0"/>
+      </g></svg>
+      ${stickSvg("translate(70,150) scale(1.6)",22,"dlArm","dlTorso","dlLegs","dlHead",4)}
+    </div>`;
+  }
+  if(mode==="body"){
+    return `<div class="mu-row"><svg class="mu-svg" viewBox="0 0 140 160" aria-hidden="true"><g transform="translate(70,72) scale(1.4)">
+      <line class="mu-torso" x1="0" y1="-30" x2="0" y2="20"/>
+      <circle class="mu-head" cx="0" cy="-40" r="7"/>
+      <line class="mu-legs" x1="0" y1="20" x2="-6" y2="55"/>
+      <line class="mu-legs" x1="0" y1="20" x2="6" y2="55"/>
+      <line class="mu-arm" x1="0" y1="-26" x2="14" y2="-4"/>
+      <line class="mu-arm" id="clFore" x1="14" y1="-4" x2="14" y2="0"/>
+    </g></svg></div>`;
+  }
+  return `<div class="mu-row">
+    ${stickSvg("translate(70,90) scale(1.8)",17,"dpArm","dpTorso","dpLegs","dpHead",4)}
+    ${stickSvg("translate(70,58)",46,"muArm","muTorso","muLegs","muHead",7)}
+    ${stickSvg("translate(70,58)",46,"puArm","puTorso","puLegs","puHead",7)}
+  </div>`;
+}
 function runIntroAnim(){
+  if(S.mode==="power") return runPowerAnim();
+  if(S.mode==="body") return runBodyAnim();
   const MU_POSES=[
     {t:0,    sh:[0,30],  hip:[0,62],  feet:[0,92]},   // suspension bras tendus
     {t:420,  sh:[0,8],   hip:[0,40],  feet:[0,72]},   // traction, menton à la barre
@@ -1109,6 +1166,32 @@ function runIntroAnim(){
   introControllers.push(driveStick({arm:"puArm",torso:"puTorso",legs:"puLegs",head:"puHead"}, PU_POSES, {loop:true}));
   introControllers.push(driveStick({arm:"muArm",torso:"muTorso",legs:"muLegs",head:"muHead"}, MU_POSES, {loop:false}));
   setTimeout(hideSplash, MU_POSES[MU_POSES.length-1].t + 150);
+}
+function runPowerAnim(){
+  const SQ_POSES=[
+    {t:0,   sh:[0,-30], hip:[0,-4],  feet:[0,24]},  // debout, barre sur le dos
+    {t:600, sh:[4,4],   hip:[2,26],  feet:[-4,50]},  // accroupi
+    {t:1200,sh:[0,-30], hip:[0,-4],  feet:[0,24]},  // retour debout
+  ];
+  const DL_POSES=[
+    {t:0,   sh:[-10,-30], hip:[5,-55], feet:[0,-8]},  // bas, barre au sol
+    {t:600, sh:[0,-45],   hip:[0,-85], feet:[0,-65]}, // haut, verrouillage
+    {t:1200,sh:[-10,-30], hip:[5,-55], feet:[0,-8]},  // retour bas
+  ];
+  const BP_POSES=[{t:0,y:-6},{t:500,y:-34},{t:1000,y:-6}];
+  introControllers.push(driveStick({arm:"sqArm",torso:"sqTorso",legs:"sqLegs",head:"sqHead"}, SQ_POSES, {loop:true}));
+  introControllers.push(driveStick({arm:"dlArm",torso:"dlTorso",legs:"dlLegs",head:"dlHead"}, DL_POSES, {loop:true, headFollows:"hip", headOffset:10}));
+  introControllers.push(driveLinear(y=>{
+    const arm=document.getElementById("bpArm"), bar=document.getElementById("bpBar");
+    if(arm) arm.setAttribute("y2",y);
+    if(bar){ bar.setAttribute("y1",y); bar.setAttribute("y2",y); }
+  }, BP_POSES, {loop:true}));
+  setTimeout(hideSplash, 1700);
+}
+function runBodyAnim(){
+  const CURL_POSES=[{t:0,y:10},{t:450,y:-22},{t:900,y:10}];
+  introControllers.push(driveLinear(y=>{ const f=document.getElementById("clFore"); if(f) f.setAttribute("y2",y); }, CURL_POSES, {loop:true}));
+  setTimeout(hideSplash, 1700);
 }
 </script>
 </body>
