@@ -621,6 +621,7 @@ function renderDrawer(){
 /* ---- calculateur d'échauffement ---- */
 let warmupState={ weight:"", step:10, bw:false };
 let accountState={ mode:"signin", email:"", password:"", notice:null };
+let pendingClaimCode=null;
 function renderAuthForm(){
   let h="";
   if(accountState.notice) h+=`<div class="editbar"><div class="lbl">✓ Compte créé</div><div class="hint">${esc(accountState.notice)}</div></div>`;
@@ -889,7 +890,8 @@ function renderSheet(){
       inner+=`<h3>Partager mon suivi</h3>`;
       if(pending.length){
         inner+=`<div class="code-display" data-a="copy-coach-code" data-code="${esc(pending[0].code)}">${esc(pending[0].code)}</div>`;
-        inner+=`<div class="backup-note">Touche le code pour le copier.</div>`;
+        inner+=`<div class="backup-note">Touche le code pour le copier, ou envoie directement le lien ci-dessous à ton coach.</div>`;
+        inner+=`<button class="mini" data-a="share-coach-code" data-code="${esc(pending[0].code)}">🔗 Partager le lien</button>`;
         inner+=`<button class="mini" data-a="gen-coach-code">Réinitialiser le code</button>`;
       } else {
         inner+=`<button class="mini" data-a="gen-coach-code">Générer un code</button>`;
@@ -899,7 +901,8 @@ function renderSheet(){
         linked.forEach(l=>inner+=`<div class="lib-item"><div class="l"><div class="nm">Coach</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><button class="icon-btn sm danger" data-a="revoke-coach-link" data-id="${l.id}">✕</button></div>`);
       }
       inner+=`<h3>Devenir coach</h3>`;
-      inner+=`<div class="fr"><label>Code reçu de ton athlète</label><input type="text" id="coachCodeInput" placeholder="ABC123" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();document.querySelector('[data-a=claim-coach-code]').click();}"></div>`;
+      const prefillCode=pendingClaimCode; pendingClaimCode=null;
+      inner+=`<div class="fr"><label>Code reçu de ton athlète</label><input type="text" id="coachCodeInput" placeholder="ABC123" value="${esc(prefillCode||"")}" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();document.querySelector('[data-a=claim-coach-code]').click();}"></div>`;
       inner+=`<button class="mini" data-a="claim-coach-code">Entrer le code</button>`;
       if(asCoach.length){
         inner+=`<h3>Mes athlètes</h3>`;
@@ -976,6 +979,13 @@ document.addEventListener("click",e=>{
     const code=el.dataset.code||"";
     if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(()=>toast("Code copié")).catch(()=>toast("Copie impossible")); }
     else toast("Copie impossible sur cet appareil");
+  }
+  else if(a==="share-coach-code"){
+    const code=el.dataset.code||"";
+    const link=location.origin+location.pathname+"?claim="+encodeURIComponent(code);
+    if(navigator.share){ navigator.share({title:"StreetApp — lien coach",text:"Suis mon suivi StreetApp :",url:link}).catch(()=>{}); }
+    else if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(link).then(()=>toast("Lien copié")).catch(()=>toast("Copie impossible")); }
+    else toast("Partage impossible sur cet appareil");
   }
   else if(a==="claim-coach-code"){
     const inp=document.getElementById("coachCodeInput");
@@ -1166,6 +1176,8 @@ function importData(file){
 
 /* ================= init + migration ================= */
 (function init(){
+  const claimParam=new URLSearchParams(location.search).get("claim");
+  if(claimParam){ pendingClaimCode=claimParam.trim().toUpperCase().replace(/[^A-Z0-9]/g,""); history.replaceState(null,"",location.pathname); }
   const th=store.get("sb:theme"); const prefDark=(typeof window!=="undefined"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches);
   S.theme = th || (prefDark?"dark":"light");
   let prog=store.get("sb:program");
@@ -1207,6 +1219,7 @@ function importData(file){
     supa.auth.onAuthStateChange((event,session)=>{
       S.user = session ? {id:session.user.id, email:session.user.email} : null;
       if(S.user) pullFromCloud();
+      if(S.user && pendingClaimCode && !S.landing){ S.sheet={type:"coaching"}; loadCoachLinks(); }
       render();
     });
   }
