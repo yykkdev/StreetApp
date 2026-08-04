@@ -968,6 +968,9 @@ document.addEventListener("click",e=>{
   else if(a==="claim-coach-code"){
     const inp=document.getElementById("coachCodeInput");
     if(!inp||!inp.value.trim()){ toast("Entre un code"); return; }
+    if(!supa){ toast("Cloud indisponible"); return; }
+    if(!S.user){ toast("Session expirée, reconnecte-toi"); return; }
+    toast("Vérification du code…");
     claimCoachCode(inp.value);
   }
   else if(a==="revoke-coach-link"){ if(confirm("Révoquer l'accès de ce coach ?")) revokeCoachLink(el.dataset.id); }
