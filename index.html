@@ -179,6 +179,9 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .sheet h3{font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:18px 0 10px;}
 .sheet h3:first-child{margin-top:0;}
 .code-display{font-family:'Space Mono',monospace; font-weight:700; font-size:28px; letter-spacing:.15em; text-align:center; color:var(--accent); padding:14px; background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:11px; margin-top:10px; cursor:pointer; user-select:all;}
+.code-display.sm{font-size:19px; padding:10px; letter-spacing:.12em; margin-top:0;}
+.coach-tabs{margin-bottom:14px;}
+.coach-btn-row{display:flex; flex-direction:column; gap:10px; margin-top:12px;}
 .lib-item{display:flex; align-items:center; gap:10px; padding:13px 12px; background:var(--card); border:1px solid var(--line); border-radius:11px; margin-bottom:8px; cursor:pointer;}
 .lib-item .l{flex:1; min-width:0;}
 .lib-item .nm{font-size:14px; font-weight:500; color:var(--ink);}
@@ -1002,27 +1005,35 @@ function renderSheet(){
       const asCoach=S.coachLinks.filter(l=>l.coach_id===S.user.id);
       const pending=asAthlete.filter(l=>!l.coach_id);
       const linked=asAthlete.filter(l=>l.coach_id);
+      const tab=sh.tab||(pendingClaimCode?"join":"mine");
+      inner+=`<div class="seg wrap coach-tabs">`;
+      inner+=`<button data-a="coach-tab" data-v="mine" class="${tab==="mine"?"on":""}">Mon code</button>`;
+      inner+=`<button data-a="coach-tab" data-v="join" class="${tab==="join"?"on":""}">Devenir coach</button>`;
+      inner+=`<button data-a="coach-tab" data-v="athletes" class="${tab==="athletes"?"on":""}">Mes athlètes${asCoach.length?` (${asCoach.length})`:""}</button>`;
+      inner+=`</div>`;
       inner+=`<div class="exform">`;
-      inner+=`<h3>Partager mon suivi</h3>`;
-      if(pending.length){
-        inner+=`<div class="code-display" data-a="copy-coach-code" data-code="${esc(pending[0].code)}">${esc(pending[0].code)}</div>`;
-        inner+=`<div class="backup-note">Touche le code pour le copier, ou envoie directement le lien ci-dessous à ton coach.</div>`;
-        inner+=`<button class="mini" data-a="share-coach-code" data-code="${esc(pending[0].code)}">🔗 Partager le lien</button>`;
-        inner+=`<button class="mini" data-a="gen-coach-code">Réinitialiser le code</button>`;
-      } else {
-        inner+=`<button class="mini" data-a="gen-coach-code">Générer un code</button>`;
-      }
-      if(linked.length){
-        inner+=`<div class="backup-note">Coachs ayant accès à ton suivi :</div>`;
-        linked.forEach(l=>inner+=`<div class="lib-item"><div class="l"><div class="nm">Coach</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><button class="icon-btn sm danger" data-a="revoke-coach-link" data-id="${l.id}">✕</button></div>`);
-      }
-      inner+=`<h3>Devenir coach</h3>`;
-      const prefillCode=pendingClaimCode; pendingClaimCode=null;
-      inner+=`<div class="fr"><label>Code reçu de ton athlète</label><input type="text" id="coachCodeInput" placeholder="ABC123" value="${esc(prefillCode||"")}" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();document.querySelector('[data-a=claim-coach-code]').click();}"></div>`;
-      inner+=`<button class="mini" data-a="claim-coach-code">Entrer le code</button>`;
-      if(asCoach.length){
-        inner+=`<h3>Mes athlètes</h3>`;
-        asCoach.forEach(l=>inner+=`<div class="lib-item" data-a="open-athlete-view" data-id="${l.athlete_id}" data-email="${esc(l.athlete_email)}"><div class="l"><div class="nm">${esc(l.athlete_email)}</div></div><span class="rep">›</span></div>`);
+      if(tab==="mine"){
+        if(pending.length){
+          inner+=`<div class="code-display sm" data-a="copy-coach-code" data-code="${esc(pending[0].code)}">${esc(pending[0].code)}</div>`;
+          inner+=`<div class="backup-note">Touche le code pour le copier, ou envoie directement le lien à ton coach.</div>`;
+          inner+=`<div class="coach-btn-row"><button class="mini" data-a="share-coach-code" data-code="${esc(pending[0].code)}">🔗 Partager le lien</button><button class="mini" data-a="gen-coach-code">Réinitialiser le code</button></div>`;
+        } else {
+          inner+=`<button class="mini" data-a="gen-coach-code">Générer un code</button>`;
+        }
+        if(linked.length){
+          inner+=`<h3 class="mt">Coachs ayant accès à ton suivi</h3>`;
+          linked.forEach(l=>inner+=`<div class="lib-item"><div class="l"><div class="nm">Coach</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><button class="icon-btn sm danger" data-a="revoke-coach-link" data-id="${l.id}">✕</button></div>`);
+        }
+      } else if(tab==="join"){
+        const prefillCode=pendingClaimCode; pendingClaimCode=null;
+        inner+=`<div class="fr"><label>Code reçu de ton athlète</label><input type="text" id="coachCodeInput" placeholder="ABC123" value="${esc(prefillCode||"")}" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();document.querySelector('[data-a=claim-coach-code]').click();}"></div>`;
+        inner+=`<button class="mini" data-a="claim-coach-code">Entrer le code</button>`;
+      } else if(tab==="athletes"){
+        if(!asCoach.length){
+          inner+=`<div class="clip-empty">Pas encore d'athlète lié. Entre un code dans l'onglet « Devenir coach ».</div>`;
+        } else {
+          asCoach.forEach(l=>inner+=`<div class="lib-item" data-a="open-athlete-view" data-id="${l.athlete_id}" data-email="${esc(l.athlete_email)}"><div class="l"><div class="nm">${esc(l.athlete_email)}</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><span class="rep">›</span></div>`);
+        }
       }
       inner+=`</div>`;
     }
@@ -1091,6 +1102,7 @@ document.addEventListener("click",e=>{
   else if(a==="open-account"){ S.drawer=false; S.sheet={type:"account"}; render(); }
   else if(a==="open-mode"){ S.drawer=false; S.sheet={type:"mode"}; render(); }
   else if(a==="open-coaching"){ S.drawer=false; S.sheet={type:"coaching"}; render(); if(S.user) loadCoachLinks(); }
+  else if(a==="coach-tab"){ S.sheet.tab=el.dataset.v; render(); }
   else if(a==="gen-coach-code"){ genCoachCode(); }
   else if(a==="copy-coach-code"){
     const code=el.dataset.code||"";
