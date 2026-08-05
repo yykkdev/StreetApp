@@ -351,6 +351,15 @@ function pullFromCloud(){
       if(error||!data){ pushToCloud(); return; }
       const remoteTs=Date.parse(data.updated_at);
       const localTs=store.get("sb:syncedAt")||0;
+      const remoteEmpty = !data.data || !Array.isArray(data.data.days) || data.data.days.length===0;
+      const localHasContent = Array.isArray(S.days) && S.days.length>0;
+      if(remoteEmpty && localHasContent){
+        /* le cloud est vide (compte recréé, sync ratée...) mais l'appareil a un vrai programme :
+           ne jamais écraser silencieusement, on republie plutôt la version locale */
+        toast("Cloud vide détecté — programme local conservé");
+        pushToCloud();
+        return;
+      }
       if(remoteTs>localTs){ applyPayload(data.data); render(); store.set("sb:syncedAt",remoteTs); toast("Programme synchronisé"); }
       else { pushToCloud(); }
     })
