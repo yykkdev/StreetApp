@@ -269,6 +269,7 @@ let S = { week:0, edit:false, scope:"model", panel:false, drawer:false, sheet:nu
   theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[],
   blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice", mode:"street", notes:{}, coachLinks:[] };
 let pendingVidEx=null, galleryUrls=[];
+let coachEdit=null; // {athleteId, athleteEmail, data:{pdc,weekRPE,library,days,blockName}, draft:null}
 const MODES = {
   street:{word:"STREET", sub:"Programme de street-lifting"},
   power:{word:"POWER", sub:"Programme de force / powerlifting"},
@@ -397,7 +398,31 @@ function loadAthleteData(athleteId, athleteEmail){
   supa.from("user_data").select("data").eq("id",athleteId).maybeSingle()
     .then(({data,error})=>{
       if(error||!data){ toast("Impossible de charger cet athlète"); return; }
-      S.sheet={type:"athlete-view", athleteEmail, data:data.data}; render();
+      S.sheet={type:"athlete-view", athleteId, athleteEmail, data:data.data}; render();
+    })
+    .catch(()=>toast("Erreur de connexion"));
+}
+function saveAthleteEdits(){
+  if(!coachEdit||!supa||!S.user) return;
+  const athleteId=coachEdit.athleteId, athleteEmail=coachEdit.athleteEmail;
+  toast("Enregistrement…");
+  supa.from("user_data").select("data,updated_at").eq("id",athleteId).maybeSingle()
+    .then(({data,error})=>{
+      if(error){ toast("Erreur : "+error.message); return; }
+      if(!data){ toast("Compte introuvable — le lien a peut-être été révoqué"); return; }
+      const fresh=data.data||{};
+      const merged={...fresh, days:coachEdit.data.days, library:coachEdit.data.library,
+        weekRPE:coachEdit.data.weekRPE, pdc:coachEdit.data.pdc, blockName:coachEdit.data.blockName};
+      const now=new Date().toISOString();
+      supa.from("user_data").update({data:merged, updated_at:now}).eq("id",athleteId).select()
+        .then(({data:upd,error:err2})=>{
+          if(err2){ toast("Erreur : "+err2.message); return; }
+          if(!upd||!upd.length){ toast("Enregistrement refusé — le lien a peut-être été révoqué"); return; }
+          coachEdit=null;
+          S.sheet={type:"athlete-view", athleteId, athleteEmail, data:merged}; render();
+          toast("Programme de l'athlète mis à jour");
+        })
+        .catch(()=>toast("Erreur de connexion"));
     })
     .catch(()=>toast("Erreur de connexion"));
 }
@@ -762,6 +787,48 @@ function renderReadOnlyDays(days, library, log, notes){
   return out;
 }
 
+/* ---- édition du programme d'un athlète par le coach (structure sur coachEdit.data, pas S) ---- */
+function renderCoachDay(day,di){
+  let h=`<section class="day"><div class="day-head">`;
+  h+=`<div class="day-tools"><button class="icon-btn" data-a="coach-day-move" data-di="${di}" data-dir="-1">↑</button><button class="icon-btn" data-a="coach-day-move" data-di="${di}" data-dir="1">↓</button></div>`;
+  h+=`<input class="dayname-input" data-in="coach-dayname" data-di="${di}" value="${esc(day.name)}">`;
+  h+=`<button class="icon-btn danger" data-a="coach-day-del" data-di="${di}">✕</button>`;
+  h+=`</div>`;
+  day.items.forEach((it,ii)=>{ h+=renderCoachItem(day,di,it,ii); });
+  h+=`<button class="additem" data-a="coach-item-add" data-di="${di}">＋ Ajouter un exercice</button>`;
+  h+=`</section>`;
+  return h;
+}
+function renderCoachItem(day,di,it,ii){
+  const ex=coachEdit.data.library[it.exId];
+  if(!ex) return `<div class="ex"><div class="ex-name">(exercice supprimé)</div></div>`;
+  const cat=ex.cat||"custom";
+  let h=`<div class="ex"><div class="ex-main"><div class="ex-info">`;
+  h+=`<div class="ex-name">${esc(ex.name)}</div>`;
+  h+=`<div class="ex-meta"><span class="chip ${cat}">${CATLABEL[cat]||"Autre"}</span>`;
+  if(ex.mode==="calc") h+=`<span class="rep"><b>${ex.sets}×${ex.reps}</b></span><span class="rep">· 1RM ${ex.bw?"+":""}${fr(ex.oneRM)}kg</span>`;
+  else if(ex.scheme) h+=`<span class="rep"><b>${esc(ex.scheme)}</b></span>`;
+  h+=`</div></div></div>`;
+  h+=`<div class="ex-tools"><button class="icon-btn" data-a="coach-item-move" data-di="${di}" data-ii="${ii}" data-dir="-1">↑</button><button class="icon-btn" data-a="coach-item-move" data-di="${di}" data-ii="${ii}" data-dir="1">↓</button><button class="icon-btn" data-a="coach-item-editex" data-id="${ex.id}">⚙</button><button class="icon-btn danger" data-a="coach-item-del" data-di="${di}" data-ii="${ii}">✕</button></div>`;
+  h+=`</div>`;
+  return h;
+}
+function openCoachExEditor(exId, di){
+  const base=exId?coachEdit.data.library[exId]:null;
+  coachEdit.draft = base ? {...base} : {id:uid(),name:"",cat:"renfort",mode:"free",bw:false,oneRM:50,sets:4,reps:5,scheme:"3 × 8-12",rpeText:"7-8"};
+  S.sheet={type:"coach-exed", exId:exId||null, di:di!=null?di:null};
+  render();
+}
+function saveCoachDraft(){
+  const d=coachEdit.draft; if(!d.name||!d.name.trim()){ toast("Donne un nom à l'exercice"); return; }
+  coachEdit.data.library[d.id]={...d};
+  const di=S.sheet.di;
+  if(di!=null) coachEdit.data.days[di].items.push({iid:uid(),exId:d.id});
+  coachEdit.draft=null;
+  S.sheet={type:"athlete-edit", athleteId:coachEdit.athleteId, athleteEmail:coachEdit.athleteEmail};
+  render(); toast("Exercice enregistré");
+}
+
 /* ---- sheets ---- */
 function renderSheet(){
   const sh=S.sheet;
@@ -837,7 +904,47 @@ function renderSheet(){
     const d=sh.data||{};
     inner=`<div class="sheet-h"><div class="t">${esc(sh.athleteEmail)}</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
     inner+=`<div class="backup-note">${esc(d.blockName||"Bloc en cours")} · lecture seule</div>`;
+    inner+=`<button class="mini" data-a="coach-edit-start" data-id="${sh.athleteId}" data-email="${esc(sh.athleteEmail)}">✎ Éditer le programme</button>`;
     inner+=renderReadOnlyDays(d.days, d.library||{}, d.log||{}, d.notes||{});
+  } else if(sh.type==="athlete-edit"){
+    const d=coachEdit?coachEdit.data:{days:[],library:{},weekRPE:[6,6.5,7,7.5],pdc:0,blockName:""};
+    inner=`<div class="sheet-h"><div class="t">Éditer · ${esc(coachEdit?coachEdit.athleteEmail:"")}</div><button class="icon-btn" data-a="coach-edit-cancel">✕</button></div>`;
+    inner+=`<div class="exform">`;
+    inner+=`<div class="fr"><label>Nom du bloc</label><input type="text" data-in="coach-blockname" value="${esc(d.blockName||"")}"></div>`;
+    inner+=`<div class="fr"><label>Poids de corps (kg)</label><input type="number" inputmode="decimal" data-in="coach-pdc" value="${d.pdc}"></div>`;
+    inner+=`<h3 class="mt">Vague RPE (progression)</h3><div class="wave">`;
+    (d.weekRPE||[]).forEach((v,i)=>inner+=`<div class="wv"><label>S${i+1}</label><input type="number" step="0.5" inputmode="decimal" data-in="coach-wave" data-i="${i}" value="${v}"></div>`);
+    inner+=`</div></div>`;
+    (d.days||[]).forEach((day,di)=>{ inner+=renderCoachDay(day,di); });
+    inner+=`<button class="addday" data-a="coach-day-add">＋ Ajouter une journée</button>`;
+    inner+=`<div class="sheet-actions"><button class="btn-ghost" data-a="coach-edit-cancel">Annuler</button><button class="btn-primary" data-a="coach-save">Enregistrer</button></div>`;
+  } else if(sh.type==="coach-picker"){
+    const lib=coachEdit?coachEdit.data.library:{};
+    inner=`<div class="sheet-h"><div class="t">Ajouter un exercice</div><button class="icon-btn" data-a="coach-back">✕</button></div>`;
+    inner+=`<button class="addday" data-a="coach-ex-new" data-di="${sh.di}">＋ Créer un nouvel exercice</button>`;
+    Object.values(lib).forEach(ex=>{
+      inner+=`<div class="lib-item" data-a="coach-pick" data-id="${ex.id}" data-di="${sh.di}"><div class="l"><div class="nm">${esc(ex.name)}</div><div class="mt">${CATLABEL[ex.cat]||"Autre"} · ${ex.mode==="calc"?"calculé":"libre"}</div></div><span class="rep">＋</span></div>`;
+    });
+  } else if(sh.type==="coach-exed"){
+    const d=coachEdit?coachEdit.draft:{};
+    inner=`<div class="sheet-h"><div class="t">${sh.exId?"Modifier l'exercice":"Nouvel exercice"}</div><button class="icon-btn" data-a="coach-back">✕</button></div>`;
+    inner+=`<div class="exform">`;
+    inner+=`<div class="fr"><label>Nom</label><input type="text" data-in="coach-draft" data-f="name" value="${esc(d.name)}"></div>`;
+    inner+=`<div class="fr"><label>Catégorie</label><div class="seg wrap">`;
+    CATS.forEach(([v,l])=>inner+=`<button data-a="coach-draft-cat" data-v="${v}" class="${d.cat===v?"on":""}">${l}</button>`);
+    inner+=`</div></div>`;
+    inner+=`<div class="fr"><label>Type</label><div class="seg"><button data-a="coach-draft-mode" data-v="calc" class="${d.mode==="calc"?"on":""}">Calculé (RPE)</button><button data-a="coach-draft-mode" data-v="free" class="${d.mode==="free"?"on":""}">Libre</button></div></div>`;
+    if(d.mode==="calc"){
+      inner+=`<div class="fr"><label>Charge du 1RM</label><div class="seg"><button data-a="coach-draft-bw" data-v="0" class="${!d.bw?"on":""}">Barre (total)</button><button data-a="coach-draft-bw" data-v="1" class="${d.bw?"on":""}">Lesté (poids de corps + ajout)</button></div></div>`;
+      inner+=`<div class="fr two"><div><label>1RM (kg)</label><input type="number" inputmode="decimal" data-in="coach-draft" data-f="oneRM" value="${d.oneRM}"></div><div><label>Nb séries</label><input type="number" inputmode="numeric" data-in="coach-draft" data-f="sets" value="${d.sets}"></div></div>`;
+      inner+=`<div class="fr"><label>Reps par série</label><input type="number" inputmode="numeric" data-in="coach-draft" data-f="reps" value="${d.reps}"></div>`;
+    } else {
+      inner+=`<div class="fr"><label>Format (séries × reps)</label><input type="text" data-in="coach-draft" data-f="scheme" value="${esc(d.scheme||"")}" placeholder="ex : 3 × 10-12"></div>`;
+      inner+=`<div class="fr"><label>Indication (RPE / consigne)</label><input type="text" data-in="coach-draft" data-f="rpeText" value="${esc(d.rpeText||"")}" placeholder="ex : 7-8, technique, facile"></div>`;
+    }
+    inner+=`<div class="sheet-actions"><button class="btn-ghost" data-a="coach-back">Annuler</button><button class="btn-primary" data-a="coach-draft-save">Enregistrer</button></div>`;
+    if(sh.exId) inner+=`<button class="btn-del" data-a="coach-ex-del" data-id="${sh.exId}">Supprimer de la bibliothèque</button>`;
+    inner+=`</div>`;
   } else if(sh.type==="blockname"){
     inner=`<div class="sheet-h"><div class="t">Nouveau bloc</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
     inner+=`<div class="exform"><div class="fr"><label>Nom du nouveau bloc</label><input type="text" data-in="draft" data-f="name" value="${esc(S.draft?S.draft.name:"")}"></div>`;
@@ -997,6 +1104,35 @@ document.addEventListener("click",e=>{
   }
   else if(a==="revoke-coach-link"){ if(confirm("Révoquer l'accès de ce coach ?")) revokeCoachLink(el.dataset.id); }
   else if(a==="open-athlete-view"){ loadAthleteData(el.dataset.id, el.dataset.email); }
+  else if(a==="coach-edit-start"){
+    const sh=S.sheet; if(!sh||!sh.data) return;
+    coachEdit={ athleteId:el.dataset.id, athleteEmail:el.dataset.email,
+      data: JSON.parse(JSON.stringify({pdc:sh.data.pdc??0, weekRPE:sh.data.weekRPE||[6,6.5,7,7.5], library:sh.data.library||{}, days:sh.data.days||[], blockName:sh.data.blockName||""})),
+      draft:null };
+    S.sheet={type:"athlete-edit", athleteId:coachEdit.athleteId, athleteEmail:coachEdit.athleteEmail};
+    render();
+  }
+  else if(a==="coach-edit-cancel"){
+    const id=coachEdit?coachEdit.athleteId:null, email=coachEdit?coachEdit.athleteEmail:null;
+    coachEdit=null;
+    if(id) loadAthleteData(id,email); else { S.sheet=null; render(); }
+  }
+  else if(a==="coach-save"){ saveAthleteEdits(); }
+  else if(a==="coach-back"){ S.sheet={type:"athlete-edit", athleteId:coachEdit.athleteId, athleteEmail:coachEdit.athleteEmail}; render(); }
+  else if(a==="coach-day-add"){ coachEdit.data.days.push({id:uid(),name:"Nouvelle journée",items:[]}); render(); }
+  else if(a==="coach-day-del"){ if(confirm("Supprimer cette journée ?")){ coachEdit.data.days.splice(+el.dataset.di,1); render(); } }
+  else if(a==="coach-day-move"){ const di=+el.dataset.di, dir=+el.dataset.dir, days=coachEdit.data.days, nj=di+dir; if(nj>=0&&nj<days.length){ const t=days[di]; days[di]=days[nj]; days[nj]=t; render(); } }
+  else if(a==="coach-item-add"){ S.sheet={type:"coach-picker", di:+el.dataset.di}; render(); }
+  else if(a==="coach-item-del"){ const di=+el.dataset.di, ii=+el.dataset.ii; coachEdit.data.days[di].items.splice(ii,1); render(); }
+  else if(a==="coach-item-move"){ const di=+el.dataset.di, ii=+el.dataset.ii, dir=+el.dataset.dir, items=coachEdit.data.days[di].items, nj=ii+dir; if(nj>=0&&nj<items.length){ const t=items[ii]; items[ii]=items[nj]; items[nj]=t; render(); } }
+  else if(a==="coach-item-editex"){ openCoachExEditor(el.dataset.id,null); }
+  else if(a==="coach-pick"){ const di=+el.dataset.di, exId=el.dataset.id; coachEdit.data.days[di].items.push({iid:uid(),exId}); S.sheet={type:"athlete-edit", athleteId:coachEdit.athleteId, athleteEmail:coachEdit.athleteEmail}; render(); toast("Exercice ajouté"); }
+  else if(a==="coach-ex-new"){ openCoachExEditor(null, el.dataset.di!=null?+el.dataset.di:null); }
+  else if(a==="coach-draft-cat"){ coachEdit.draft.cat=el.dataset.v; render(); }
+  else if(a==="coach-draft-mode"){ coachEdit.draft.mode=el.dataset.v; render(); }
+  else if(a==="coach-draft-bw"){ coachEdit.draft.bw=el.dataset.v==="1"; render(); }
+  else if(a==="coach-draft-save"){ saveCoachDraft(); }
+  else if(a==="coach-ex-del"){ const id=el.dataset.id; if(confirm("Supprimer cet exercice et toutes ses occurrences dans le programme ?")){ delete coachEdit.data.library[id]; coachEdit.data.days.forEach(d=>d.items=d.items.filter(it=>it.exId!==id)); S.sheet={type:"athlete-edit", athleteId:coachEdit.athleteId, athleteEmail:coachEdit.athleteEmail}; render(); } }
   else if(a==="set-mode"){ S.mode=el.dataset.v; if(!S.landing) saveProgram(); render(); }
   else if(a==="open-daynote"){
     const w=+el.dataset.w, dayId=el.dataset.day;
@@ -1077,6 +1213,11 @@ document.addEventListener("input",e=>{
   else if(t==="account"){ accountState[el.dataset.f]=el.value; }
   else if(t==="daynote"){ const key=el.dataset.k; const n=S.notes[key]||(S.notes[key]={}); n.note=el.value; saveNotes(); }
   else if(t==="note"){ const k=el.dataset.k; const e=S.log[k]||(S.log[k]={sets:[],open:true}); e.note=el.value; saveLog(); }
+  else if(t==="coach-dayname"){ coachEdit.data.days[+el.dataset.di].name=el.value; }
+  else if(t==="coach-pdc"){ const v=parseFloat(el.value); if(!isNaN(v)) coachEdit.data.pdc=v; }
+  else if(t==="coach-wave"){ const v=parseFloat(el.value); if(!isNaN(v)) coachEdit.data.weekRPE[+el.dataset.i]=v; }
+  else if(t==="coach-blockname"){ coachEdit.data.blockName=el.value; }
+  else if(t==="coach-draft"){ const f=el.dataset.f; coachEdit.draft[f]= (f==="oneRM"||f==="sets"||f==="reps") ? parseFloat(el.value)||0 : el.value; }
 });
 document.addEventListener("change",e=>{ const el=e.target;
   if(el.id==="importf"&&el.files[0]){ importData(el.files[0]); el.value=""; }
