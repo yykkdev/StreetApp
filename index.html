@@ -180,8 +180,9 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .sheet h3:first-child{margin-top:0;}
 .code-display{font-family:'Space Mono',monospace; font-weight:700; font-size:28px; letter-spacing:.15em; text-align:center; color:var(--accent); padding:14px; background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:11px; margin-top:10px; cursor:pointer; user-select:all;}
 .code-display.sm{font-size:19px; padding:10px; letter-spacing:.12em; margin-top:0;}
-.coach-tabs{margin-bottom:14px;}
+.coach-toggle{display:flex; gap:10px; margin-bottom:16px;}
 .coach-btn-row{display:flex; flex-direction:column; gap:10px; margin-top:12px;}
+.mini.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
 .lib-item{display:flex; align-items:center; gap:10px; padding:13px 12px; background:var(--card); border:1px solid var(--line); border-radius:11px; margin-bottom:8px; cursor:pointer;}
 .lib-item .l{flex:1; min-width:0;}
 .lib-item .nm{font-size:14px; font-weight:500; color:var(--ink);}
@@ -647,6 +648,7 @@ function renderDrawer(){
   h+=`<button class="drawer-item" data-a="open-warmup">🔥 Échauffement</button>`;
   h+=`<button class="drawer-item" data-a="open-account">☁️ ${S.user?"Compte connecté":"Compte"}</button>`;
   h+=`<button class="drawer-item" data-a="open-coaching">👥 Coaching</button>`;
+  if(S.user && S.coachLinks.some(l=>l.coach_id===S.user.id)) h+=`<button class="drawer-item" data-a="open-my-athletes">🏋️ Mes athlètes</button>`;
   h+=`<button class="drawer-item" data-a="open-mode">🎯 Discipline</button>`;
   h+=`<div class="drawer-sep"></div>`;
   h+=`<button class="drawer-item" data-a="block-new">＋ Nouveau bloc</button>`;
@@ -1002,14 +1004,12 @@ function renderSheet(){
       inner+=`<div class="clip-empty">Connecte-toi (☁️ Compte) pour utiliser le coaching.</div>`;
     } else {
       const asAthlete=S.coachLinks.filter(l=>l.athlete_id===S.user.id);
-      const asCoach=S.coachLinks.filter(l=>l.coach_id===S.user.id);
-      const pending=asAthlete.filter(l=>!l.coach_id);
       const linked=asAthlete.filter(l=>l.coach_id);
+      const pending=asAthlete.filter(l=>!l.coach_id);
       const tab=sh.tab||(pendingClaimCode?"join":"mine");
-      inner+=`<div class="seg wrap coach-tabs">`;
-      inner+=`<button data-a="coach-tab" data-v="mine" class="${tab==="mine"?"on":""}">Mon code</button>`;
-      inner+=`<button data-a="coach-tab" data-v="join" class="${tab==="join"?"on":""}">Devenir coach</button>`;
-      inner+=`<button data-a="coach-tab" data-v="athletes" class="${tab==="athletes"?"on":""}">Mes athlètes${asCoach.length?` (${asCoach.length})`:""}</button>`;
+      inner+=`<div class="coach-toggle">`;
+      inner+=`<button class="mini ${tab==="mine"?"on":""}" data-a="coach-tab" data-v="mine">Mon code</button>`;
+      inner+=`<button class="mini ${tab==="join"?"on":""}" data-a="coach-tab" data-v="join">Devenir coach</button>`;
       inner+=`</div>`;
       inner+=`<div class="exform">`;
       if(tab==="mine"){
@@ -1028,14 +1028,16 @@ function renderSheet(){
         const prefillCode=pendingClaimCode; pendingClaimCode=null;
         inner+=`<div class="fr"><label>Code reçu de ton athlète</label><input type="text" id="coachCodeInput" placeholder="ABC123" value="${esc(prefillCode||"")}" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();document.querySelector('[data-a=claim-coach-code]').click();}"></div>`;
         inner+=`<button class="mini" data-a="claim-coach-code">Entrer le code</button>`;
-      } else if(tab==="athletes"){
-        if(!asCoach.length){
-          inner+=`<div class="clip-empty">Pas encore d'athlète lié. Entre un code dans l'onglet « Devenir coach ».</div>`;
-        } else {
-          asCoach.forEach(l=>inner+=`<div class="lib-item" data-a="open-athlete-view" data-id="${l.athlete_id}" data-email="${esc(l.athlete_email)}"><div class="l"><div class="nm">${esc(l.athlete_email)}</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><span class="rep">›</span></div>`);
-        }
       }
       inner+=`</div>`;
+    }
+  } else if(sh.type==="my-athletes"){
+    const asCoach=S.coachLinks.filter(l=>l.coach_id===S.user.id);
+    inner=`<div class="sheet-h"><div class="t">Mes athlètes</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
+    if(!asCoach.length){
+      inner+=`<div class="clip-empty">Pas encore d'athlète lié.</div>`;
+    } else {
+      asCoach.forEach(l=>inner+=`<div class="lib-item" data-a="open-athlete-view" data-id="${l.athlete_id}" data-email="${esc(l.athlete_email)}"><div class="l"><div class="nm">${esc(l.athlete_email)}</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><span class="rep">›</span></div>`);
     }
   }
   return `<div class="sheet-backdrop" data-a="backdrop"><div class="sheet">${inner}</div></div>`;
@@ -1102,6 +1104,7 @@ document.addEventListener("click",e=>{
   else if(a==="open-account"){ S.drawer=false; S.sheet={type:"account"}; render(); }
   else if(a==="open-mode"){ S.drawer=false; S.sheet={type:"mode"}; render(); }
   else if(a==="open-coaching"){ S.drawer=false; S.sheet={type:"coaching"}; render(); if(S.user) loadCoachLinks(); }
+  else if(a==="open-my-athletes"){ S.drawer=false; S.sheet={type:"my-athletes"}; render(); if(S.user) loadCoachLinks(); }
   else if(a==="coach-tab"){ S.sheet.tab=el.dataset.v; render(); }
   else if(a==="gen-coach-code"){ genCoachCode(); }
   else if(a==="copy-coach-code"){
