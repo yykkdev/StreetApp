@@ -279,7 +279,7 @@ const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"
 /* ================= état + stockage ================= */
 let S = { week:0, edit:false, scope:"model", panel:false, drawer:false, sheet:null, draft:null,
   theme:"light", pdc:75, weekRPE:[6,6.5,7,7.5], library:{}, days:[], overrides:{}, log:{}, videos:[],
-  blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice", mode:"street", notes:{}, coachLinks:[] };
+  blockName:"Bloc 1 — Accumulation", archive:[], user:null, landing:false, landingView:"choice", mode:"street", notes:{}, coachLinks:[], coachNotes:{} };
 let pendingVidEx=null, galleryUrls=[];
 let coachEdit=null; // {athleteId, athleteEmail, data:{pdc,weekRPE,library,days,blockName}, draft:null}
 const MODES = {
@@ -433,7 +433,8 @@ function saveAthleteEdits(){
       if(!data){ toast("Compte introuvable — le lien a peut-être été révoqué"); return; }
       const fresh=data.data||{};
       const merged={...fresh, days:coachEdit.data.days, library:coachEdit.data.library,
-        weekRPE:coachEdit.data.weekRPE, pdc:coachEdit.data.pdc, blockName:coachEdit.data.blockName};
+        weekRPE:coachEdit.data.weekRPE, pdc:coachEdit.data.pdc, blockName:coachEdit.data.blockName,
+        coachNotes:coachEdit.data.coachNotes};
       const now=new Date().toISOString();
       supa.from("user_data").update({data:merged, updated_at:now}).eq("id",athleteId).select()
         .then(({data:upd,error:err2})=>{
@@ -567,6 +568,42 @@ function loadFor(di,ii,w){
   const pct=fr(T[clampRpe(rpe)][(reps>=1&&reps<=10?reps:5)-1])+"%"+(ref.fromPerf?" · d'après S"+(ref.wk+1):"");
   if(ex.bw) return {kind:"num", prefix:"+", value:r05((S.pdc+ref.rm)*mult-S.pdc), unit:"kg", pct};
   return {kind:"num", prefix:"", value:r25(ref.rm*mult), unit:"kg", pct};
+}
+/* ---- miroirs purs des fonctions ci-dessus, pour la vue coach (ne lisent jamais S) ---- */
+function coachItemCfg(data,di,ii,w){
+  const day=data.days[di], it=day.items[ii], ex=data.library[it.exId]||{};
+  const ov=data.overrides[w+"|"+it.iid]||{};
+  const sets = ov.sets!=null?ov.sets : (it.sets!=null?it.sets: ex.sets);
+  const reps = ov.reps!=null?ov.reps : (it.reps!=null?it.reps: ex.reps);
+  const rpe  = ov.rpe!=null?ov.rpe : data.weekRPE[w];
+  const skip = !!ov.skip;
+  return {ex,it,ov,sets,reps,rpe,skip};
+}
+function coachBestTheo(data,exId,w){
+  const ex=data.library[exId]; let best=null;
+  data.days.forEach((day)=>day.items.forEach((it)=>{
+    if(it.exId===exId){ const v=bestTheoOfEntry(ex, data.log[w+"|"+it.iid], data.pdc); if(v!=null&&(best==null||v>best)) best=v; }
+  }));
+  return best;
+}
+function coachRefRM(data,exId,w){
+  for(let k=w-1;k>=0;k--){ const t=coachBestTheo(data,exId,k); if(t!=null&&isFinite(t)&&t>0) return {rm:t,fromPerf:true,wk:k}; }
+  const ex=data.library[exId]; return {rm:ex?ex.oneRM:0, fromPerf:false, wk:null};
+}
+function coachLoadFor(data,di,ii,w){
+  const {ex,reps,rpe}=coachItemCfg(data,di,ii,w);
+  if(!ex||ex.mode!=="calc") return {kind:"text", display:"—", pct:""};
+  const ref=coachRefRM(data,ex.id,w), mult=gmult(rpe,reps);
+  const pct=fr(T[clampRpe(rpe)][(reps>=1&&reps<=10?reps:5)-1])+"%"+(ref.fromPerf?" · d'après S"+(ref.wk+1):"");
+  if(ex.bw) return {kind:"num", prefix:"+", value:r05((data.pdc+ref.rm)*mult-data.pdc), unit:"kg", pct};
+  return {kind:"num", prefix:"", value:r25(ref.rm*mult), unit:"kg", pct};
+}
+function coachDayTonnage(data,day,w){ return day.items.reduce((sum,it)=>sum+entryTonnage(data.log[w+"|"+it.iid]),0); }
+function coachWeekTonnage(data,w){ return data.days.reduce((sum,day)=>sum+coachDayTonnage(data,day,w),0); }
+function coachMetaLine(data,di,ii,w){
+  const {ex,sets,reps,rpe}=coachItemCfg(data,di,ii,w);
+  if(ex.mode==="calc") return {scheme:`${sets} × ${reps}`, rpe:`RPE ${fr(rpe)}`};
+  return {scheme:ex.scheme||"", rpe:ex.rpeText||""};
 }
 function theoLine(ex,st){ const v=e1rm(ex,st); if(v==null) return ""; return ex.bw?`≈ 1RM théo : +${fr(v)} kg`:`≈ 1RM théo : ${fr(v)} kg`; }
 
@@ -722,6 +759,8 @@ function renderDay(day,di,w){
     h+=`<button class="icon-btn ${hasNote?"on":""}" data-a="open-daynote" data-w="${w}" data-day="${day.id}" aria-label="Ressenti du jour">📓</button>`;
   }
   h+=`</div>`;
+  const cnote=(S.coachNotes||{})[w+"|"+day.id];
+  if(cnote) h+=`<div class="rep">💬 ${esc(cnote)}</div>`;
   day.items.forEach((it,ii)=>{ h+=renderItem(day,di,it,ii,w); });
   if(S.edit&&S.scope==="model") h+=`<button class="additem" data-a="item-add" data-di="${di}">＋ Ajouter un exercice</button>`;
   h+=`</section>`;
@@ -811,27 +850,52 @@ function renderReadOnlyDays(days, library, log, notes){
 
 /* ---- édition du programme d'un athlète par le coach (structure sur coachEdit.data, pas S) ---- */
 function renderCoachDay(day,di){
+  const w=coachEdit.week;
+  const total=day.items.length;
+  const done=day.items.filter((it,ii)=>isExDone(coachItemCfg(coachEdit.data,di,ii,w), coachEdit.data.log[w+"|"+it.iid])).length;
+  const tonnage=coachDayTonnage(coachEdit.data,day,w);
   let h=`<section class="day"><div class="day-head">`;
   h+=`<div class="day-tools"><button class="icon-btn" data-a="coach-day-move" data-di="${di}" data-dir="-1">↑</button><button class="icon-btn" data-a="coach-day-move" data-di="${di}" data-dir="1">↓</button></div>`;
   h+=`<input class="dayname-input" data-in="coach-dayname" data-di="${di}" value="${esc(day.name)}">`;
   h+=`<button class="icon-btn danger" data-a="coach-day-del" data-di="${di}">✕</button>`;
   h+=`</div>`;
+  h+=`<div class="rep">S${w+1} · ${done}/${total} exercice${total>1?"s":""} fait${done>1?"s":""}${tonnage>0?` · <b>${fr(tonnage)} kg</b>`:""}</div>`;
+  const dn=coachEdit.data.notes[w+"|"+day.id];
+  if(dn&&(dn.fatigue||dn.sommeil||dn.stress||dn.douleur||dn.note)){
+    const bits=FEELING_METRICS.filter(([f])=>dn[f]).map(([f,label])=>`${label} ${dn[f]}/5`);
+    if(dn.note) bits.push(`« ${esc(dn.note)} »`);
+    h+=`<div class="rep">${bits.join(" · ")}</div>`;
+  }
   day.items.forEach((it,ii)=>{ h+=renderCoachItem(day,di,it,ii); });
   h+=`<button class="additem" data-a="coach-item-add" data-di="${di}">＋ Ajouter un exercice</button>`;
+  const cn=coachEdit.data.coachNotes[w+"|"+day.id]||"";
+  h+=`<input type="text" class="ex-note" data-in="coach-note" data-w="${w}" data-day="${day.id}" value="${esc(cn)}" placeholder="Commentaire pour cette journée (visible par l'athlète)">`;
   h+=`</section>`;
   return h;
 }
 function renderCoachItem(day,di,it,ii){
+  const w=coachEdit.week;
   const ex=coachEdit.data.library[it.exId];
   if(!ex) return `<div class="ex"><div class="ex-name">(exercice supprimé)</div></div>`;
   const cat=ex.cat||"custom";
+  const meta=coachMetaLine(coachEdit.data,di,ii,w);
+  const info=coachLoadFor(coachEdit.data,di,ii,w);
   let h=`<div class="ex"><div class="ex-main"><div class="ex-info">`;
   h+=`<div class="ex-name">${esc(ex.name)}</div>`;
   h+=`<div class="ex-meta"><span class="chip ${cat}">${CATLABEL[cat]||"Autre"}</span>`;
-  if(ex.mode==="calc") h+=`<span class="rep"><b>${ex.sets}×${ex.reps}</b></span><span class="rep">· 1RM ${ex.bw?"+":""}${fr(ex.oneRM)}kg</span>`;
-  else if(ex.scheme) h+=`<span class="rep"><b>${esc(ex.scheme)}</b></span>`;
-  h+=`</div></div></div>`;
+  if(meta.scheme) h+=`<span class="rep"><b>${esc(meta.scheme)}</b></span>`;
+  if(meta.rpe) h+=`<span class="rep">· ${esc(meta.rpe)}</span>`;
+  h+=`</div></div>`;
+  h+=`<div class="load">`;
+  if(info.kind==="num"){ h+=`<span class="load-num">${info.prefix}${fr(info.value)}</span><div class="load-unit">${info.unit}</div><div class="load-pct">${info.pct}</div>`; }
+  else { h+=`<span class="load-num pdc">${info.display}</span>`; if(info.pct) h+=`<div class="load-pct">${info.pct}</div>`; }
+  h+=`</div></div>`;
   h+=`<div class="ex-tools"><button class="icon-btn" data-a="coach-item-move" data-di="${di}" data-ii="${ii}" data-dir="-1">↑</button><button class="icon-btn" data-a="coach-item-move" data-di="${di}" data-ii="${ii}" data-dir="1">↓</button><button class="icon-btn" data-a="coach-item-editex" data-id="${ex.id}">⚙</button><button class="icon-btn danger" data-a="coach-item-del" data-di="${di}" data-ii="${ii}">✕</button></div>`;
+  const entry=coachEdit.data.log[w+"|"+it.iid];
+  if(entry&&Array.isArray(entry.sets)){
+    const parts=entry.sets.filter(s=>s.charge||s.reps||s.rpe).map(s=>`${s.charge??"—"}kg×${s.reps??"—"}@${s.rpe??"—"}`);
+    if(parts.length||entry.note) h+=`<div class="rep">S${w+1} : ${parts.join(" · ")||"—"}${entry.note?` · « ${esc(entry.note)} »`:""}</div>`;
+  }
   h+=`</div>`;
   return h;
 }
@@ -929,16 +993,39 @@ function renderSheet(){
     inner+=`<button class="mini" data-a="coach-edit-start" data-id="${sh.athleteId}" data-email="${esc(sh.athleteEmail)}">✎ Éditer le programme</button>`;
     inner+=renderReadOnlyDays(d.days, d.library||{}, d.log||{}, d.notes||{});
   } else if(sh.type==="athlete-edit"){
-    const d=coachEdit?coachEdit.data:{days:[],library:{},weekRPE:[6,6.5,7,7.5],pdc:0,blockName:""};
-    inner=`<div class="sheet-h"><div class="t">Éditer · ${esc(coachEdit?coachEdit.athleteEmail:"")}</div><button class="icon-btn" data-a="coach-edit-cancel">✕</button></div>`;
-    inner+=`<div class="exform">`;
-    inner+=`<div class="fr"><label>Nom du bloc</label><input type="text" data-in="coach-blockname" value="${esc(d.blockName||"")}"></div>`;
-    inner+=`<div class="fr"><label>Poids de corps (kg)</label><input type="number" inputmode="decimal" data-in="coach-pdc" value="${d.pdc}"></div>`;
-    inner+=`<h3 class="mt">Vague RPE (progression)</h3><div class="wave">`;
-    (d.weekRPE||[]).forEach((v,i)=>inner+=`<div class="wv"><label>S${i+1}</label><input type="number" step="0.5" inputmode="decimal" data-in="coach-wave" data-i="${i}" value="${v}"></div>`);
-    inner+=`</div></div>`;
-    (d.days||[]).forEach((day,di)=>{ inner+=renderCoachDay(day,di); });
-    inner+=`<button class="addday" data-a="coach-day-add">＋ Ajouter une journée</button>`;
+    const d=coachEdit?coachEdit.data:{days:[],library:{},weekRPE:[6,6.5,7,7.5],pdc:0,blockName:"",archive:[]};
+    const tab=coachEdit?coachEdit.tab:"program";
+    inner=`<div class="sheet-h"><div class="t">${esc(coachEdit?coachEdit.athleteEmail:"")}</div><button class="icon-btn" data-a="coach-edit-cancel">✕</button></div>`;
+    inner+=`<div class="coach-toggle"><button class="mini ${tab==="program"?"on":""}" data-a="coach-view-tab" data-v="program">Programme</button><button class="mini ${tab==="history"?"on":""}" data-a="coach-view-tab" data-v="history">Historique</button></div>`;
+    if(tab==="history"){
+      if(coachEdit.historyArchiveId){
+        const blk=(d.archive||[]).find(a=>a.id===coachEdit.historyArchiveId);
+        if(!blk){
+          inner+=`<div class="clip-empty">Bloc introuvable.</div>`;
+        } else {
+          inner+=`<button class="mini" data-a="coach-history-back">← Retour à l'historique</button>`;
+          inner+=`<h3 class="mt">${esc(blk.name)}</h3>`;
+          inner+=renderReadOnlyDays(blk.days, blk.library, blk.log, blk.notes);
+        }
+      } else if(!d.archive||!d.archive.length){
+        inner+=`<div class="clip-empty">Pas encore de bloc archivé.</div>`;
+      } else {
+        d.archive.forEach(blk=>inner+=`<div class="lib-item" data-a="coach-history-open" data-id="${blk.id}"><div class="l"><div class="nm">${esc(blk.name)}</div><div class="mt">Archivé le ${new Date(blk.archivedAt).toLocaleDateString("fr-FR")}</div></div><span class="rep">›</span></div>`);
+      }
+    } else {
+      inner+=`<div class="exform">`;
+      inner+=`<div class="fr"><label>Nom du bloc</label><input type="text" data-in="coach-blockname" value="${esc(d.blockName||"")}"></div>`;
+      inner+=`<div class="fr"><label>Poids de corps (kg)</label><input type="number" inputmode="decimal" data-in="coach-pdc" value="${d.pdc}"></div>`;
+      inner+=`<h3 class="mt">Vague RPE (progression)</h3><div class="wave">`;
+      (d.weekRPE||[]).forEach((v,i)=>inner+=`<div class="wv"><label>S${i+1}</label><input type="number" step="0.5" inputmode="decimal" data-in="coach-wave" data-i="${i}" value="${v}"></div>`);
+      inner+=`</div></div>`;
+      inner+=`<div class="rail-wrap"><div class="rail">`;
+      for(let i=0;i<4;i++) inner+=`<button class="wk ${i===coachEdit.week?"active":""}" data-a="coach-week" data-v="${i}">S${i+1}<small>RPE ${fr(d.weekRPE[i])}</small></button>`;
+      const wkTon=coachWeekTonnage(d,coachEdit.week);
+      inner+=`</div><div class="wk-caption">Semaine ${coachEdit.week+1} · <b>${WEEK_TAG[coachEdit.week]}</b>${wkTon>0?` · <b>${fr(wkTon)} kg</b> au total`:""}</div></div>`;
+      (d.days||[]).forEach((day,di)=>{ inner+=renderCoachDay(day,di); });
+      inner+=`<button class="addday" data-a="coach-day-add">＋ Ajouter une journée</button>`;
+    }
     inner+=`<div class="sheet-actions"><button class="btn-ghost" data-a="coach-edit-cancel">Annuler</button><button class="btn-primary" data-a="coach-save">Enregistrer</button></div>`;
   } else if(sh.type==="coach-picker"){
     const lib=coachEdit?coachEdit.data.library:{};
@@ -1056,7 +1143,7 @@ function renderSheet(){
       inner+=`</div>`;
     }
   }
-  const fullPage = sh.type==="my-athletes";
+  const fullPage = sh.type==="my-athletes" || sh.type==="athlete-edit";
   return `<div class="sheet-backdrop${fullPage?" full":""}" data-a="backdrop"><div class="sheet${fullPage?" full":""}">${inner}</div></div>`;
 }
 
@@ -1149,8 +1236,11 @@ document.addEventListener("click",e=>{
   else if(a==="coach-edit-start"){
     const sh=S.sheet; if(!sh||!sh.data) return;
     coachEdit={ athleteId:el.dataset.id, athleteEmail:el.dataset.email,
-      data: JSON.parse(JSON.stringify({pdc:sh.data.pdc??0, weekRPE:sh.data.weekRPE||[6,6.5,7,7.5], library:sh.data.library||{}, days:sh.data.days||[], blockName:sh.data.blockName||""})),
-      draft:null };
+      data: JSON.parse(JSON.stringify({
+        pdc:sh.data.pdc??0, weekRPE:sh.data.weekRPE||[6,6.5,7,7.5], library:sh.data.library||{}, days:sh.data.days||[], blockName:sh.data.blockName||"",
+        log:sh.data.log||{}, overrides:sh.data.overrides||{}, archive:sh.data.archive||[], notes:sh.data.notes||{}, coachNotes:sh.data.coachNotes||{}
+      })),
+      draft:null, week:0, tab:"program", historyArchiveId:null };
     S.sheet={type:"athlete-edit", athleteId:coachEdit.athleteId, athleteEmail:coachEdit.athleteEmail};
     render();
   }
@@ -1161,6 +1251,10 @@ document.addEventListener("click",e=>{
   }
   else if(a==="coach-save"){ saveAthleteEdits(); }
   else if(a==="coach-back"){ S.sheet={type:"athlete-edit", athleteId:coachEdit.athleteId, athleteEmail:coachEdit.athleteEmail}; render(); }
+  else if(a==="coach-week"){ coachEdit.week=+el.dataset.v; render(); }
+  else if(a==="coach-view-tab"){ coachEdit.tab=el.dataset.v; coachEdit.historyArchiveId=null; render(); }
+  else if(a==="coach-history-open"){ coachEdit.historyArchiveId=el.dataset.id; render(); }
+  else if(a==="coach-history-back"){ coachEdit.historyArchiveId=null; render(); }
   else if(a==="coach-day-add"){ coachEdit.data.days.push({id:uid(),name:"Nouvelle journée",items:[]}); render(); }
   else if(a==="coach-day-del"){ if(confirm("Supprimer cette journée ?")){ coachEdit.data.days.splice(+el.dataset.di,1); render(); } }
   else if(a==="coach-day-move"){ const di=+el.dataset.di, dir=+el.dataset.dir, days=coachEdit.data.days, nj=di+dir; if(nj>=0&&nj<days.length){ const t=days[di]; days[di]=days[nj]; days[nj]=t; render(); } }
@@ -1260,6 +1354,7 @@ document.addEventListener("input",e=>{
   else if(t==="coach-wave"){ const v=parseFloat(el.value); if(!isNaN(v)) coachEdit.data.weekRPE[+el.dataset.i]=v; }
   else if(t==="coach-blockname"){ coachEdit.data.blockName=el.value; }
   else if(t==="coach-draft"){ const f=el.dataset.f; coachEdit.draft[f]= (f==="oneRM"||f==="sets"||f==="reps") ? parseFloat(el.value)||0 : el.value; }
+  else if(t==="coach-note"){ const key=el.dataset.w+"|"+el.dataset.day; const cn=coachEdit.data.coachNotes||(coachEdit.data.coachNotes={}); cn[key]=el.value; }
 });
 document.addEventListener("change",e=>{ const el=e.target;
   if(el.id==="importf"&&el.files[0]){ importData(el.files[0]); el.value=""; }
@@ -1338,13 +1433,14 @@ function saveDraft(){
 
 /* export / import */
 function buildPayload(){
-  return {app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme,blockName:S.blockName,archive:S.archive,mode:S.mode,notes:S.notes};
+  return {app:"street-builder",v:3,date:new Date().toISOString(),pdc:S.pdc,weekRPE:S.weekRPE,library:S.library,days:S.days,overrides:S.overrides,log:S.log,theme:S.theme,blockName:S.blockName,archive:S.archive,mode:S.mode,notes:S.notes,coachNotes:S.coachNotes};
 }
 function applyPayload(d){
   if(d.pdc!=null) S.pdc=d.pdc; if(d.weekRPE) S.weekRPE=d.weekRPE; if(d.library) S.library=d.library; if(d.days) S.days=d.days; if(d.overrides) S.overrides=d.overrides; if(d.log) S.log=d.log; if(d.theme) S.theme=d.theme;
-  if(d.blockName) S.blockName=d.blockName; if(d.archive) S.archive=d.archive; if(d.mode) S.mode=d.mode; if(d.notes) S.notes=d.notes;
-  normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveArchive(); saveNotes(); saveTheme();
+  if(d.blockName) S.blockName=d.blockName; if(d.archive) S.archive=d.archive; if(d.mode) S.mode=d.mode; if(d.notes) S.notes=d.notes; if(d.coachNotes) S.coachNotes=d.coachNotes;
+  normalizeLog(); saveProgram(); store.set("sb:log",S.log); saveArchive(); saveNotes(); saveTheme(); saveCoachNotes();
 }
+function saveCoachNotes(){ store.set("sb:coachNotes",S.coachNotes); }
 function exportData(){
   const blob=new Blob([JSON.stringify(buildPayload(),null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="suivi-street.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -1394,6 +1490,7 @@ function importData(file){
   S.videos = store.get("sb:videos") || [];
   S.archive = store.get("sb:archive") || [];
   S.notes = store.get("sb:notes") || {};
+  S.coachNotes = store.get("sb:coachNotes") || {};
   render(); renderRest();
   const splashEl=document.getElementById("splash");
   if(splashEl) splashEl.innerHTML = splashHtml(S.mode) + `<div class="splash-word">${MODES[S.mode].word}</div>`;
