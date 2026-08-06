@@ -183,6 +183,14 @@ body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none
 .coach-toggle{display:flex; gap:10px; margin-bottom:16px;}
 .coach-btn-row{display:flex; flex-direction:column; gap:10px; margin-top:12px;}
 .mini.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
+.sheet-backdrop.full{align-items:stretch; background:var(--bg);}
+.sheet.full{max-width:none; max-height:none; height:100%; width:100%; border-radius:0; border-top:0; padding:calc(8px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));}
+.athlete-list{display:flex; flex-direction:column; gap:10px; margin-top:8px;}
+.athlete-card{display:flex; align-items:center; gap:14px; padding:16px; background:var(--card); border:1px solid var(--line); border-radius:14px; cursor:pointer; box-shadow:0 1px 2px var(--shadow);}
+.athlete-avatar{width:44px; height:44px; border-radius:50%; background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Space Mono',monospace; font-weight:700; font-size:18px; flex-shrink:0;}
+.athlete-info{flex:1; min-width:0;}
+.athlete-email{font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.athlete-since{font-family:'Space Mono',monospace; font-size:10.5px; color:var(--muted); margin-top:2px;}
 .lib-item{display:flex; align-items:center; gap:10px; padding:13px 12px; background:var(--card); border:1px solid var(--line); border-radius:11px; margin-bottom:8px; cursor:pointer;}
 .lib-item .l{flex:1; min-width:0;}
 .lib-item .nm{font-size:14px; font-weight:500; color:var(--ink);}
@@ -1035,12 +1043,21 @@ function renderSheet(){
     const asCoach=S.coachLinks.filter(l=>l.coach_id===S.user.id);
     inner=`<div class="sheet-h"><div class="t">Mes athlètes</div><button class="icon-btn" data-a="sheet-close">✕</button></div>`;
     if(!asCoach.length){
-      inner+=`<div class="clip-empty">Pas encore d'athlète lié.</div>`;
+      inner+=`<div class="clip-empty">Pas encore d'athlète lié. Va dans Coaching → Devenir coach pour en ajouter un.</div>`;
     } else {
-      asCoach.forEach(l=>inner+=`<div class="lib-item" data-a="open-athlete-view" data-id="${l.athlete_id}" data-email="${esc(l.athlete_email)}"><div class="l"><div class="nm">${esc(l.athlete_email)}</div><div class="mt">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div><span class="rep">›</span></div>`);
+      inner+=`<div class="athlete-list">`;
+      asCoach.forEach(l=>{
+        const initial=esc((l.athlete_email||"?").charAt(0).toUpperCase());
+        inner+=`<div class="athlete-card" data-a="open-athlete-view" data-id="${l.athlete_id}" data-email="${esc(l.athlete_email)}">`
+          +`<div class="athlete-avatar">${initial}</div>`
+          +`<div class="athlete-info"><div class="athlete-email">${esc(l.athlete_email)}</div><div class="athlete-since">Lié le ${new Date(l.created_at).toLocaleDateString("fr-FR")}</div></div>`
+          +`<span class="rep">›</span></div>`;
+      });
+      inner+=`</div>`;
     }
   }
-  return `<div class="sheet-backdrop" data-a="backdrop"><div class="sheet">${inner}</div></div>`;
+  const fullPage = sh.type==="my-athletes";
+  return `<div class="sheet-backdrop${fullPage?" full":""}" data-a="backdrop"><div class="sheet${fullPage?" full":""}">${inner}</div></div>`;
 }
 
 /* ================= actions ================= */
